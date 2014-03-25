@@ -86,10 +86,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, actorSystem: A
         }
 
       case StatusUpdate(executorId, taskId, state, data) =>
+        val cpus = scheduler.getCpusForTask(taskId)
         scheduler.statusUpdate(taskId, state, data.value)
         if (TaskState.isFinished(state)) {
           if (executorActor.contains(executorId)) {
-            freeCores(executorId) += scheduler.CPUS_PER_TASK
+            freeCores(executorId) += cpus
             makeOffers(executorId)
           } else {
             // Ignoring the update since we don't know about the executor.
@@ -140,7 +141,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, actorSystem: A
     // Launch tasks returned by a set of resource offers
     def launchTasks(tasks: Seq[Seq[TaskDescription]]) {
       for (task <- tasks.flatten) {
-        freeCores(task.executorId) -= scheduler.CPUS_PER_TASK
+        freeCores(task.executorId) -= task.cpus
         executorActor(task.executorId) ! LaunchTask(task)
       }
     }

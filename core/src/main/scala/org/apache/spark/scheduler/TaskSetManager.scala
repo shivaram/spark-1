@@ -56,6 +56,10 @@ private[spark] class TaskSetManager(
 {
   val conf = sched.sc.conf
 
+  // CPUs to request per task
+  val CPUS_PER_TASK = Option(taskSet.properties).map(
+    _.getProperty("spark.task.cpus")).getOrElse("1").toInt
+
   /*
    * Sometimes if an executor is dead or in an otherwise invalid state, the driver
    * does not realize right away leading to repeated task failures. If enabled,
@@ -385,7 +389,7 @@ private[spark] class TaskSetManager(
       maxLocality: TaskLocality.TaskLocality)
     : Option[TaskDescription] =
   {
-    if (!isZombie) {
+    if (!isZombie && availableCpus >= CPUS_PER_TASK) {
       val curTime = clock.getTime()
 
       var allowedLocality = getAllowedLocalityLevel(curTime)
@@ -399,8 +403,8 @@ private[spark] class TaskSetManager(
           val task = tasks(index)
           val taskId = sched.newTaskId()
           // Figure out whether this should count as a preferred launch
-          logInfo("Starting task %s:%d as TID %s on executor %s: %s (%s)".format(
-            taskSet.id, index, taskId, execId, host, taskLocality))
+          logInfo("Starting task %s:%d using %d cores as TID %s on executor %s: %s (%s)".format(
+            taskSet.id, index, CPUS_PER_TASK, taskId, execId, host, taskLocality))
           // Do various bookkeeping
           copiesRunning(index) += 1
           val info = new TaskInfo(taskId, index, curTime, execId, host, taskLocality)
@@ -421,7 +425,8 @@ private[spark] class TaskSetManager(
             taskSet.id, index, serializedTask.limit, timeTaken))
           val taskName = "task %s:%d".format(taskSet.id, index)
           sched.dagScheduler.taskStarted(task, info)
-          return Some(new TaskDescription(taskId, execId, taskName, index, serializedTask))
+          return Some(new TaskDescription(
+            taskId, execId, taskName, index, serializedTask, CPUS_PER_TASK))
         }
         case _ =>
       }
