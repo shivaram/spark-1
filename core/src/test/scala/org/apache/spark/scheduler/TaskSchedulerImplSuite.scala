@@ -315,14 +315,6 @@ class TaskSchedulerImplSuite extends FunSuite with LocalSparkContext with Loggin
     var taskDescriptions = taskScheduler.resourceOffers(zeroCoreWorkerOffers).flatten
     assert(0 === taskDescriptions.length)
 
-    // No tasks should run as we only have 1 core free.
-    val numFreeCores = 1
-    val singleCoreWorkerOffers = Seq(new WorkerOffer("executor0", "host0", numFreeCores),
-      new WorkerOffer("executor1", "host1", numFreeCores))
-    taskScheduler.submitTasks(taskSet)
-    taskDescriptions = taskScheduler.resourceOffers(singleCoreWorkerOffers).flatten
-    assert(0 === taskDescriptions.length)
-
     // Now change the offers to have 2 cores in one executor and verify if it
     // is chosen.
     val multiCoreWorkerOffers = Seq(new WorkerOffer("executor0", "host0", taskCpus),
