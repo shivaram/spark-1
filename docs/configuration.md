@@ -191,6 +191,13 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td>spark.ui.killEnabled</td>
+  <td>true</td>
+  <td>
+    Allows stages and corresponding jobs to be killed from the web ui.
+  </td>
+</tr>
+<tr>
   <td>spark.shuffle.compress</td>
   <td>true</td>
   <td>
@@ -346,6 +353,32 @@ Apart from these, the following properties are also available, and may be useful
   <td>
     Number of seconds after which the standalone deploy master considers a worker lost if it
     receives no heartbeats.
+  </td>
+</tr>
+<tr>
+  <td>spark.worker.cleanup.enabled</td>
+  <td>true</td>
+  <td>
+    Enable periodic cleanup of worker / application directories.  Note that this only affects standalone
+    mode, as YARN works differently.
+  </td>
+</tr>
+<tr>
+  <td>spark.worker.cleanup.interval</td>
+  <td>1800 (30 minutes)</td>
+  <td>
+    Controls the interval, in seconds, at which the worker cleans up old application work dirs
+    on the local machine.
+  </td>
+</tr>
+<tr>
+  <td>spark.worker.cleanup.appDataTtl</td>
+  <td>7 * 24 * 3600 (7 days)</td>
+  <td>
+    The number of seconds to retain application work directories on each worker.  This is a Time To Live
+    and should depend on the amount of available disk space you have.  Application logs and jars are
+    downloaded to each application work dir.  Over time, the work dirs can quickly fill up disk space,
+    especially if you run jobs very frequently.
   </td>
 </tr>
 <tr>
@@ -568,6 +601,15 @@ Apart from these, the following properties are also available, and may be useful
   <td>
     Communication timeout to use when fetching files added through SparkContext.addFile() from
     the driver.
+  </td>
+</tr>
+<tr>
+  <td>spark.files.userClassPathFirst</td>
+  <td>false</td>
+  <td>
+    (Experimental) Whether to give user-added jars precedence over Spark's own jars when
+    loading classes in Executors. This feature can be used to mitigate conflicts between
+    Spark's dependencies and user dependencies. It is currently an experimental feature.
   </td>
 </tr>
 <tr>

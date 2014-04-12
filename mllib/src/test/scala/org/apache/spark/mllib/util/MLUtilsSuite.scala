@@ -27,7 +27,6 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 
 import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.util.MLUtils._
 
 class MLUtilsSuite extends FunSuite with LocalSparkContext {
@@ -56,18 +55,6 @@ class MLUtilsSuite extends FunSuite with LocalSparkContext {
     }
   }
 
-  test("compute stats") {
-    val data = Seq.fill(3)(Seq(
-      LabeledPoint(1.0, Vectors.dense(1.0, 2.0, 3.0)),
-      LabeledPoint(0.0, Vectors.dense(3.0, 4.0, 5.0))
-    )).flatten
-    val rdd = sc.parallelize(data, 2)
-    val (meanLabel, mean, std) = MLUtils.computeStats(rdd, 3, 6)
-    assert(meanLabel === 0.5)
-    assert(mean === Vectors.dense(2.0, 3.0, 4.0))
-    assert(std === Vectors.dense(1.0, 1.0, 1.0))
-  }
-
   test("loadLibSVMData") {
     val lines =
       """
@@ -80,7 +67,7 @@ class MLUtilsSuite extends FunSuite with LocalSparkContext {
     Files.write(lines, file, Charsets.US_ASCII)
     val path = tempDir.toURI.toString
 
-    val pointsWithNumFeatures = MLUtils.loadLibSVMData(sc, path, 6).collect()
+    val pointsWithNumFeatures = MLUtils.loadLibSVMData(sc, path, BinaryLabelParser, 6).collect()
     val pointsWithoutNumFeatures = MLUtils.loadLibSVMData(sc, path).collect()
 
     for (points <- Seq(pointsWithNumFeatures, pointsWithoutNumFeatures)) {
@@ -93,7 +80,7 @@ class MLUtilsSuite extends FunSuite with LocalSparkContext {
       assert(points(2).features === Vectors.sparse(6, Seq((1, 4.0), (3, 5.0), (5, 6.0))))
     }
 
-    val multiclassPoints = MLUtils.loadLibSVMData(sc, path, MLUtils.multiclassLabelParser).collect()
+    val multiclassPoints = MLUtils.loadLibSVMData(sc, path, MulticlassLabelParser).collect()
     assert(multiclassPoints.length === 3)
     assert(multiclassPoints(0).label === 1.0)
     assert(multiclassPoints(1).label === -1.0)

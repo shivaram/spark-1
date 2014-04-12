@@ -26,7 +26,6 @@ import java.util.concurrent.{ConcurrentHashMap, Executors, ThreadPoolExecutor}
 import scala.collection.JavaConversions._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.SortedSet
 import scala.io.Source
 import scala.reflect.ClassTag
 
@@ -499,10 +498,10 @@ private[spark] object Utils extends Logging {
   private val hostPortParseResults = new ConcurrentHashMap[String, (String, Int)]()
 
   def parseHostPort(hostPort: String): (String,  Int) = {
-    {
-      // Check cache first.
-      val cached = hostPortParseResults.get(hostPort)
-      if (cached != null) return cached
+    // Check cache first.
+    val cached = hostPortParseResults.get(hostPort)
+    if (cached != null) {
+      return cached
     }
 
     val indx: Int = hostPort.lastIndexOf(':')
@@ -597,9 +596,24 @@ private[spark] object Utils extends Logging {
     }
 
     if (fileInCanonicalDir.getCanonicalFile().equals(fileInCanonicalDir.getAbsoluteFile())) {
-      return false;
+      return false
     } else {
-      return true;
+      return true
+    }
+  }
+
+  /**
+   * Finds all the files in a directory whose last modified time is older than cutoff seconds.
+   * @param dir  must be the path to a directory, or IllegalArgumentException is thrown
+   * @param cutoff measured in seconds. Files older than this are returned.
+   */
+  def findOldFiles(dir: File, cutoff: Long): Seq[File] = {
+    val currentTimeMillis = System.currentTimeMillis
+    if (dir.isDirectory) {
+      val files = listFilesSafely(dir)
+      files.filter { file => file.lastModified < (currentTimeMillis - cutoff * 1000) }
+    } else {
+      throw new IllegalArgumentException(dir + " is not a directory!")
     }
   }
 
@@ -1006,5 +1020,12 @@ private[spark] object Utils extends Logging {
    */
   def getHadoopFileSystem(path: URI): FileSystem = {
     FileSystem.get(path, SparkHadoopUtil.get.newConfiguration())
+  }
+
+  /**
+   * Return a Hadoop FileSystem with the scheme encoded in the given path.
+   */
+  def getHadoopFileSystem(path: String): FileSystem = {
+    getHadoopFileSystem(new URI(path))
   }
 }
