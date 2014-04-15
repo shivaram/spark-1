@@ -57,8 +57,8 @@ private[spark] class TaskSetManager(
   val conf = sched.sc.conf
 
   // CPUs to request per task
-  val CPUS_PER_TASK = Option(taskSet.properties).map(
-    _.getProperty("spark.task.cpus")).getOrElse("1").toInt
+  val CPUS_PER_TASK = Option(taskSet.properties).flatMap(x =>
+    Option(x.getProperty("spark.task.cpus"))).getOrElse("1").toInt
 
   /*
    * Sometimes if an executor is dead or in an otherwise invalid state, the driver
