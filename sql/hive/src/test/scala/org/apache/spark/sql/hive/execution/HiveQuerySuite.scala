@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hive.execution
 
-import org.apache.spark.sql.hive.TestHive._
+import org.apache.spark.sql.hive.test.TestHive._
 
 /**
  * A set of test cases expressed in Hive QL that are not covered by the tests included in the hive distribution.
@@ -32,6 +32,9 @@ class HiveQuerySuite extends HiveComparisonTest {
     hql("FROM src SELECT key").collect()
     hiveql("FROM src SELECT key").collect()
   }
+
+  createQueryTest("Constant Folding Optimization for AVG_SUM_COUNT",
+    "SELECT AVG(0), SUM(0), COUNT(null), COUNT(value) FROM src GROUP BY key")
 
   createQueryTest("Simple Average",
     "SELECT AVG(key) FROM src")

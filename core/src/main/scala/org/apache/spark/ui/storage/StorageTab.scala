@@ -19,6 +19,7 @@ package org.apache.spark.ui.storage
 
 import scala.collection.mutable
 
+import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.ui._
 import org.apache.spark.scheduler._
 import org.apache.spark.storage.{RDDInfo, StorageStatusListener, StorageUtils}
@@ -30,14 +31,16 @@ private[ui] class StorageTab(parent: SparkUI) extends WebUITab(parent, "storage"
   val listener = new StorageListener(parent.storageStatusListener)
 
   attachPage(new StoragePage(this))
-  attachPage(new RddPage(this))
+  attachPage(new RDDPage(this))
   parent.registerListener(listener)
 }
 
 /**
- * A SparkListener that prepares information to be displayed on the BlockManagerUI
+ * :: DeveloperApi ::
+ * A SparkListener that prepares information to be displayed on the BlockManagerUI.
  */
-private[ui] class StorageListener(storageStatusListener: StorageStatusListener)
+@DeveloperApi
+class StorageListener(storageStatusListener: StorageStatusListener)
   extends SparkListener {
 
   private val _rddInfoMap = mutable.Map[Int, RDDInfo]()
@@ -66,8 +69,8 @@ private[ui] class StorageListener(storageStatusListener: StorageStatusListener)
   }
 
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted) = synchronized {
-    val rddInfo = stageSubmitted.stageInfo.rddInfo
-    _rddInfoMap.getOrElseUpdate(rddInfo.id, rddInfo)
+    val rddInfos = stageSubmitted.stageInfo.rddInfos
+    rddInfos.foreach { info => _rddInfoMap.getOrElseUpdate(info.id, info) }
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted) = synchronized {

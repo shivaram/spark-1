@@ -130,11 +130,17 @@ object Vectors {
   private[mllib] def fromBreeze(breezeVector: BV[Double]): Vector = {
     breezeVector match {
       case v: BDV[Double] =>
-        require(v.offset == 0, s"Do not support non-zero offset ${v.offset}.")
-        require(v.stride == 1, s"Do not support stride other than 1, but got ${v.stride}.")
-        new DenseVector(v.data)
+        if (v.offset == 0 && v.stride == 1) {
+          new DenseVector(v.data)
+        } else {
+          new DenseVector(v.toArray)  // Can't use underlying array directly, so make a new one
+        }
       case v: BSV[Double] =>
-        new SparseVector(v.length, v.index, v.data)
+        if (v.index.length == v.used) {
+          new SparseVector(v.length, v.index, v.data)
+        } else {
+          new SparseVector(v.length, v.index.slice(0, v.used), v.data.slice(0, v.used))
+        }
       case v: BV[_] =>
         sys.error("Unsupported Breeze vector type: " + v.getClass.getName)
     }

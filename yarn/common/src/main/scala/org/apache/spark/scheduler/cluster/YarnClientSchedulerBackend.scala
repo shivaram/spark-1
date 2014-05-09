@@ -19,7 +19,7 @@ package org.apache.spark.scheduler.cluster
 
 import org.apache.hadoop.yarn.api.records.{ApplicationId, YarnApplicationState}
 import org.apache.spark.{SparkException, Logging, SparkContext}
-import org.apache.spark.deploy.yarn.{Client, ClientArguments}
+import org.apache.spark.deploy.yarn.{Client, ClientArguments, ExecutorLauncher}
 import org.apache.spark.scheduler.TaskSchedulerImpl
 
 import scala.collection.mutable.ArrayBuffer
@@ -35,10 +35,10 @@ private[spark] class YarnClientSchedulerBackend(
 
   private[spark] def addArg(optionName: String, envVar: String, sysProp: String,
       arrayBuf: ArrayBuffer[String]) {
-    if (System.getProperty(sysProp) != null) {
-      arrayBuf += (optionName, System.getProperty(sysProp))
-    } else if (System.getenv(envVar) != null) {
+    if (System.getenv(envVar) != null) {
       arrayBuf += (optionName, System.getenv(envVar))
+    } else if (sc.getConf.contains(sysProp)) {
+      arrayBuf += (optionName, sc.getConf.get(sysProp))
     }
   }
 
@@ -54,7 +54,7 @@ private[spark] class YarnClientSchedulerBackend(
       "--class", "notused",
       "--jar", null,
       "--args", hostport,
-      "--am-class", "org.apache.spark.deploy.yarn.ExecutorLauncher"
+      "--am-class", classOf[ExecutorLauncher].getName
     )
 
     // process any optional arguments, given either as environment variables

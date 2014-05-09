@@ -39,6 +39,9 @@ import org.apache.spark.{Logging, SecurityManager, SparkConf, SparkContext}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.util.Utils
 
+/**
+ * An application master that runs the users driver program and allocates executors.
+ */
 class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
                         sparkConf: SparkConf) extends Logging {
 
@@ -66,9 +69,6 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
     sparkConf.getInt("spark.yarn.max.worker.failures", math.max(args.numExecutors * 2, 3)))
 
   private var registered = false
-
-  private val sparkUser = Option(System.getenv("SPARK_USER")).getOrElse(
-    SparkContext.SPARK_UNKNOWN_USER)
 
   def run() {
     // Setup the directories so things go to yarn approved directories rather
@@ -144,12 +144,12 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
     // LOCAL_DIRS => 2.X, YARN_LOCAL_DIRS => 0.23.X
     val localDirs = Option(System.getenv("YARN_LOCAL_DIRS"))
       .orElse(Option(System.getenv("LOCAL_DIRS")))
- 
+
     localDirs match {
       case None => throw new Exception("Yarn Local dirs can't be empty")
       case Some(l) => l
     }
-  } 
+  }
 
   private def getApplicationAttemptId(): ApplicationAttemptId = {
     val envs = System.getenv()
@@ -189,7 +189,8 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
       false /* initialize */ ,
       Thread.currentThread.getContextClassLoader).getMethod("main", classOf[Array[String]])
     val t = new Thread {
-      override def run(): Unit = SparkHadoopUtil.get.runAsUser(sparkUser) { () =>
+      override def run() {
+
         var successed = false
         try {
           // Copy
@@ -318,8 +319,9 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
             logInfo("Allocating %d containers to make up for (potentially) lost containers".
               format(missingExecutorCount))
             yarnAllocator.allocateContainers(missingExecutorCount)
+          } else {
+            sendProgress()
           }
-          else sendProgress()
           Thread.sleep(sleepTime)
         }
       }
@@ -358,7 +360,7 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
         return
       }
       isFinished = true
-      
+
       logInfo("finishApplicationMaster with " + status)
       if (registered) {
         val finishReq = Records.newRecord(classOf[FinishApplicationMasterRequest])
@@ -366,8 +368,7 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
         finishReq.setAppAttemptId(appAttemptId)
         finishReq.setFinishApplicationStatus(status)
         finishReq.setDiagnostics(diagnostics)
-        // Set tracking url to empty since we don't have a history server.
-        finishReq.setTrackingUrl("")
+        finishReq.setTrackingUrl(sparkConf.get("spark.yarn.historyServer.address", ""))
         resourceManager.finishApplicationMaster(finishReq)
       }
     }
@@ -477,6 +478,8 @@ object ApplicationMaster {
 
   def main(argStrings: Array[String]) {
     val args = new ApplicationMasterArguments(argStrings)
-    new ApplicationMaster(args).run()
+    SparkHadoopUtil.get.runAsSparkUser { () =>
+      new ApplicationMaster(args).run()
+    }
   }
 }

@@ -21,6 +21,7 @@ import java.lang.{Long => JLong, Iterable => JIterable}
 import java.util.{List => JList}
 
 import scala.collection.JavaConversions._
+import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
 import com.google.common.base.Optional
@@ -261,7 +262,7 @@ class JavaPairDStream[K, V](val dstream: DStream[(K, V)])(
    * @param windowDuration width of the window; must be a multiple of this DStream's
    *                       batching interval
    */
-  def reduceByKeyAndWindow(reduceFunc: Function2[V, V, V], windowDuration: Duration)
+  def reduceByKeyAndWindow(reduceFunc: JFunction2[V, V, V], windowDuration: Duration)
   :JavaPairDStream[K, V] = {
     dstream.reduceByKeyAndWindow(reduceFunc, windowDuration)
   }

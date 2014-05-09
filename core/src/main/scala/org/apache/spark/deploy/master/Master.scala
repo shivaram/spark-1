@@ -23,6 +23,7 @@ import java.util.Date
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.util.Random
 
 import akka.actor._
@@ -236,8 +237,7 @@ private[spark] class Master(
             if (waitingDrivers.contains(d)) {
               waitingDrivers -= d
               self ! DriverStateChanged(driverId, DriverState.KILLED, None)
-            }
-            else {
+            } else {
               // We just notify the worker to kill the driver here. The final bookkeeping occurs
               // on the return path when the worker submits a state change back to the master
               // to notify it that the driver was successfully killed.

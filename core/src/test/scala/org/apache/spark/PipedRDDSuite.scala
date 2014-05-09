@@ -19,8 +19,6 @@ package org.apache.spark
 
 import java.io.File
 
-import com.google.common.io.Files
-
 import org.scalatest.FunSuite
 
 import org.apache.spark.rdd.{HadoopRDD, PipedRDD, HadoopPartition}
@@ -28,6 +26,7 @@ import org.apache.hadoop.mapred.{JobConf, TextInputFormat, FileSplit}
 import org.apache.hadoop.fs.Path
 
 import scala.collection.Map
+import scala.language.postfixOps
 import scala.sys.process._
 import scala.util.Try
 
@@ -179,14 +178,12 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {
       }
       val hadoopPart1 = generateFakeHadoopPartition()
       val pipedRdd = new PipedRDD(nums, "printenv " + varName)
-      val tContext = new TaskContext(0, 0, 0, interrupted = false, runningLocally = false,
-        taskMetrics = TaskMetrics.empty())
+      val tContext = new TaskContext(0, 0, 0)
       val rddIter = pipedRdd.compute(hadoopPart1, tContext)
       val arr = rddIter.toArray
       assert(arr(0) == "/some/path")
     } else {
       // printenv isn't available so just pass the test
-      assert(true)
     }
   }
 

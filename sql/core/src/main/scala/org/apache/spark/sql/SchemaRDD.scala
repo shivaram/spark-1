@@ -17,14 +17,20 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.{Dependency, OneToOneDependency, Partition, TaskContext}
+import net.razorvine.pickle.Pickler
+
+import org.apache.spark.{Dependency, OneToOneDependency, Partition, Partitioner, TaskContext}
 import org.apache.spark.annotation.{AlphaComponent, Experimental}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.api.java.JavaSchemaRDD
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType}
 import org.apache.spark.sql.catalyst.types.BooleanType
+import org.apache.spark.sql.execution.{ExistingRdd, SparkLogicalPlan}
+import org.apache.spark.api.java.JavaRDD
+import java.util.{Map => JMap}
 
 /**
  * :: AlphaComponent ::
@@ -79,8 +85,6 @@ import org.apache.spark.sql.catalyst.types.BooleanType
  *  rdd.where('key === 1).orderBy('value.asc).select('key).collect()
  * }}}
  *
- *  @todo There is currently no support for creating SchemaRDDs from either Java or Python RDDs.
- *
  *  @groupname Query Language Integrated Queries
  *  @groupdesc Query Functions that create new queries from SchemaRDDs.  The
  *             result of all query functions is also a SchemaRDD, allowing multiple operations to be
@@ -99,7 +103,7 @@ class SchemaRDD(
   def baseSchemaRDD = this
 
   // =========================================================================================
-  // RDD functions: Copy the interal row representation so we present immutable data to users.
+  // RDD functions: Copy the internal row representation so we present immutable data to users.
   // =========================================================================================
 
   override def compute(split: Partition, context: TaskContext): Iterator[Row] =
@@ -131,7 +135,7 @@ class SchemaRDD(
     new SchemaRDD(sqlContext, Project(exprs, logicalPlan))
 
   /**
-   * Filters the ouput, only returning those rows where `condition` evaluates to true.
+   * Filters the output, only returning those rows where `condition` evaluates to true.
    *
    * {{{
    *   schemaRDD.where('a === 'b)
@@ -149,9 +153,9 @@ class SchemaRDD(
    *
    * @param otherPlan the [[SchemaRDD]] that should be joined with this one.
    * @param joinType One of `Inner`, `LeftOuter`, `RightOuter`, or `FullOuter`. Defaults to `Inner.`
-   * @param on       An optional condition for the join operation.  This is equivilent to the `ON`
+   * @param on       An optional condition for the join operation.  This is equivalent to the `ON`
    *                 clause in standard SQL.  In the case of `Inner` joins, specifying a
-   *                 `condition` is equivilent to adding `where` clauses after the `join`.
+   *                 `condition` is equivalent to adding `where` clauses after the `join`.
    *
    * @group Query
    */
@@ -193,7 +197,7 @@ class SchemaRDD(
 
   /**
    * Applies a qualifier to the attributes of this relation.  Can be used to disambiguate attributes
-   * with the same name, for example, when peforming self-joins.
+   * with the same name, for example, when performing self-joins.
    *
    * {{{
    *   val x = schemaRDD.where('a === 1).as('x)
@@ -254,10 +258,11 @@ class SchemaRDD(
    * @group Query
    */
   @Experimental
+  override
   def sample(
-      fraction: Double,
       withReplacement: Boolean = true,
-      seed: Int = (math.random * 1000).toInt) =
+      fraction: Double,
+      seed: Long) =
     new SchemaRDD(sqlContext, Sample(fraction, withReplacement, seed, logicalPlan))
 
   /**
@@ -272,8 +277,8 @@ class SchemaRDD(
    *              an `OUTER JOIN` in SQL.  When no output rows are produced by the generator for a
    *              given row, a single row will be output, with `NULL` values for each of the
    *              generated columns.
-   * @param alias an optional alias that can be used as qualif for the attributes that are produced
-   *              by this generate operation.
+   * @param alias an optional alias that can be used as qualifier for the attributes that are
+   *              produced by this generate operation.
    *
    * @group Query
    */
@@ -286,26 +291,92 @@ class SchemaRDD(
     new SchemaRDD(sqlContext, Generate(generator, join, outer, None, logicalPlan))
 
   /**
-   * :: Experimental ::
-   * Adds the rows from this RDD to the specified table.  Note in a standard [[SQLContext]] there is
-   * no notion of persistent tables, and thus queries that contain this operator will fail to
-   * optimize.  When working with an extension of a SQLContext that has a persistent catalog, such
-   * as a `HiveContext`, this operation will result in insertions to the table specified.
+   * Returns this RDD as a SchemaRDD.  Intended primarily to force the invocation of the implicit
+   * conversion from a standard RDD to a SchemaRDD.
    *
-   * @group schema
-   */
-  @Experimental
-  def insertInto(tableName: String, overwrite: Boolean = false) =
-    new SchemaRDD(
-      sqlContext,
-      InsertIntoTable(UnresolvedRelation(None, tableName), Map.empty, logicalPlan, overwrite))
-
-  /**
-   * Returns this RDD as a SchemaRDD.
    * @group schema
    */
   def toSchemaRDD = this
 
-  /** FOR INTERNAL USE ONLY */
-  def analyze = sqlContext.analyzer(logicalPlan)
+  /**
+   * Returns this RDD as a JavaSchemaRDD.
+   *
+   * @group schema
+   */
+  def toJavaSchemaRDD: JavaSchemaRDD = new JavaSchemaRDD(sqlContext, logicalPlan)
+
+  private[sql] def javaToPython: JavaRDD[Array[Byte]] = {
+    val fieldNames: Seq[String] = this.queryExecution.analyzed.output.map(_.name)
+    this.mapPartitions { iter =>
+      val pickle = new Pickler
+      iter.map { row =>
+        val map: JMap[String, Any] = new java.util.HashMap
+        // TODO: We place the map in an ArrayList so that the object is pickled to a List[Dict].
+        // Ideally we should be able to pickle an object directly into a Python collection so we
+        // don't have to create an ArrayList every time.
+        val arr: java.util.ArrayList[Any] = new java.util.ArrayList
+        row.zip(fieldNames).foreach { case (obj, name) =>
+          map.put(name, obj)
+        }
+        arr.add(map)
+        pickle.dumps(arr)
+      }
+    }
+  }
+
+  /**
+   * Creates SchemaRDD by applying own schema to derived RDD. Typically used to wrap return value
+   * of base RDD functions that do not change schema.
+   *
+   * @param rdd RDD derived from this one and has same schema
+   *
+   * @group schema
+   */
+  private def applySchema(rdd: RDD[Row]): SchemaRDD = {
+    new SchemaRDD(sqlContext, SparkLogicalPlan(ExistingRdd(logicalPlan.output, rdd)))
+  }
+
+  // =======================================================================
+  // Base RDD functions that do NOT change schema
+  // =======================================================================
+
+  // Transformations (return a new RDD)
+
+  override def coalesce(numPartitions: Int, shuffle: Boolean = false)
+                       (implicit ord: Ordering[Row] = null): SchemaRDD =
+    applySchema(super.coalesce(numPartitions, shuffle)(ord))
+
+  override def distinct(): SchemaRDD =
+    applySchema(super.distinct())
+
+  override def distinct(numPartitions: Int)
+                       (implicit ord: Ordering[Row] = null): SchemaRDD =
+    applySchema(super.distinct(numPartitions)(ord))
+
+  override def filter(f: Row => Boolean): SchemaRDD =
+    applySchema(super.filter(f))
+
+  override def intersection(other: RDD[Row]): SchemaRDD =
+    applySchema(super.intersection(other))
+
+  override def intersection(other: RDD[Row], partitioner: Partitioner)
+                           (implicit ord: Ordering[Row] = null): SchemaRDD =
+    applySchema(super.intersection(other, partitioner)(ord))
+
+  override def intersection(other: RDD[Row], numPartitions: Int): SchemaRDD =
+    applySchema(super.intersection(other, numPartitions))
+
+  override def repartition(numPartitions: Int)
+                          (implicit ord: Ordering[Row] = null): SchemaRDD =
+    applySchema(super.repartition(numPartitions)(ord))
+
+  override def subtract(other: RDD[Row]): SchemaRDD =
+    applySchema(super.subtract(other))
+
+  override def subtract(other: RDD[Row], numPartitions: Int): SchemaRDD =
+    applySchema(super.subtract(other, numPartitions))
+
+  override def subtract(other: RDD[Row], p: Partitioner)
+                       (implicit ord: Ordering[Row] = null): SchemaRDD =
+    applySchema(super.subtract(other, p)(ord))
 }

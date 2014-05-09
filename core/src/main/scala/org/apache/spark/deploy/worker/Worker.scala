@@ -23,6 +23,7 @@ import java.util.Date
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 import akka.actor._
 import akka.remote.{DisassociatedEvent, RemotingLifecycleEvent}
@@ -70,8 +71,6 @@ private[spark] class Worker(
   // TTL for app folders/data;  after TTL expires it will be cleaned up
   val APP_DATA_RETENTION_SECS = conf.getLong("spark.worker.cleanup.appDataTtl", 7 * 24 * 3600)
 
-  // Index into masterUrls that we're currently trying to register with.
-  var masterIndex = 0
 
   val masterLock: Object = new Object()
   var master: ActorSelection = null
@@ -100,6 +99,8 @@ private[spark] class Worker(
 
   val metricsSystem = MetricsSystem.createMetricsSystem("worker", conf, securityMgr)
   val workerSource = new WorkerSource(this)
+
+  var registrationRetryTimer: Option[Cancellable] = None
 
   def coresFree: Int = cores - coresUsed
   def memoryFree: Int = memory - memoryUsed
@@ -162,13 +163,12 @@ private[spark] class Worker(
 
   def registerWithMaster() {
     tryRegisterAllMasters()
-
     var retries = 0
-    lazy val retryTimer: Cancellable =
+    registrationRetryTimer = Some {
       context.system.scheduler.schedule(REGISTRATION_TIMEOUT, REGISTRATION_TIMEOUT) {
         retries += 1
         if (registered) {
-          retryTimer.cancel()
+          registrationRetryTimer.foreach(_.cancel())
         } else if (retries >= REGISTRATION_RETRIES) {
           logError("All masters are unresponsive! Giving up.")
           System.exit(1)
@@ -176,7 +176,7 @@ private[spark] class Worker(
           tryRegisterAllMasters()
         }
       }
-    retryTimer // start timer
+    }
   }
 
   override def receive = {
@@ -243,7 +243,7 @@ private[spark] class Worker(
           }
         } catch {
           case e: Exception => {
-            logError("Failed to launch exector %s/%d for %s".format(appId, execId, appDesc.name))
+            logError("Failed to launch executor %s/%d for %s".format(appId, execId, appDesc.name))
             if (executors.contains(appId + "/" + execId)) {
               executors(appId + "/" + execId).kill()
               executors -= appId + "/" + execId
@@ -345,6 +345,7 @@ private[spark] class Worker(
   }
 
   override def postStop() {
+    registrationRetryTimer.foreach(_.cancel())
     executors.values.foreach(_.kill())
     drivers.values.foreach(_.kill())
     webUi.stop()
