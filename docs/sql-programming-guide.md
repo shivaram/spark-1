@@ -620,8 +620,8 @@ val people = sqlContext.jsonFile(path)
 // The inferred schema can be visualized using the printSchema() method.
 people.printSchema()
 // root
-//  |-- age: IntegerType
-//  |-- name: StringType
+//  |-- age: integer (nullable = true)
+//  |-- name: string (nullable = true)
 
 // Register this SchemaRDD as a table.
 people.registerTempTable("people")
@@ -658,8 +658,8 @@ JavaSchemaRDD people = sqlContext.jsonFile(path);
 // The inferred schema can be visualized using the printSchema() method.
 people.printSchema();
 // root
-//  |-- age: IntegerType
-//  |-- name: StringType
+//  |-- age: integer (nullable = true)
+//  |-- name: string (nullable = true)
 
 // Register this JavaSchemaRDD as a table.
 people.registerTempTable("people");
@@ -697,8 +697,8 @@ people = sqlContext.jsonFile(path)
 # The inferred schema can be visualized using the printSchema() method.
 people.printSchema()
 # root
-#  |-- age: IntegerType
-#  |-- name: StringType
+#  |-- age: integer (nullable = true)
+#  |-- name: string (nullable = true)
 
 # Register this SchemaRDD as a table.
 people.registerTempTable("people")
@@ -732,7 +732,7 @@ Configuration of Hive is done by placing your `hive-site.xml` file in `conf/`.
 <div data-lang="scala"  markdown="1">
 
 When working with Hive one must construct a `HiveContext`, which inherits from `SQLContext`, and
-adds support for finding tables in in the MetaStore and writing queries using HiveQL. Users who do
+adds support for finding tables in the MetaStore and writing queries using HiveQL. Users who do
 not have an existing Hive deployment can still create a HiveContext.  When not configured by the
 hive-site.xml, the context automatically creates `metastore_db` and `warehouse` in the current
 directory.
@@ -753,7 +753,7 @@ sqlContext.sql("FROM src SELECT key, value").collect().foreach(println)
 <div data-lang="java"  markdown="1">
 
 When working with Hive one must construct a `JavaHiveContext`, which inherits from `JavaSQLContext`, and
-adds support for finding tables in in the MetaStore and writing queries using HiveQL. In addition to
+adds support for finding tables in the MetaStore and writing queries using HiveQL. In addition to
 the `sql` method a `JavaHiveContext` also provides an `hql` methods, which allows queries to be
 expressed in HiveQL.
 
@@ -774,7 +774,7 @@ Row[] results = sqlContext.sql("FROM src SELECT key, value").collect();
 <div data-lang="python"  markdown="1">
 
 When working with Hive one must construct a `HiveContext`, which inherits from `SQLContext`, and
-adds support for finding tables in in the MetaStore and writing queries using HiveQL. In addition to
+adds support for finding tables in the MetaStore and writing queries using HiveQL. In addition to
 the `sql` method a `HiveContext` also provides an `hql` methods, which allows queries to be
 expressed in HiveQL.
 
@@ -1394,7 +1394,7 @@ please use factory methods provided in
 </tr>
 <tr>
   <td> <b>StructType</b> </td>
-  <td> org.apache.spark.sql.api.java </td>
+  <td> org.apache.spark.sql.api.java.Row </td>
   <td>
   DataType.createStructType(<i>fields</i>)<br />
   <b>Note:</b> <i>fields</i> is a List or an array of StructFields.
