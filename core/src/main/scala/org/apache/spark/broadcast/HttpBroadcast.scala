@@ -40,7 +40,16 @@ private[spark] class HttpBroadcast[T: ClassTag](
     @transient var value_ : T, isLocal: Boolean, id: Long)
   extends Broadcast[T](id) with Logging with Serializable {
 
-  override protected def getValue() = value_
+  @volatile private var available = true
+
+  override protected def getValue() = {
+    HttpBroadcast.synchronized {
+      if (!available) {
+        readBroadcastBlock()
+      }
+    }
+    value_
+  }
 
   private val blockId = BroadcastBlockId(id)
 
@@ -77,28 +86,31 @@ private[spark] class HttpBroadcast[T: ClassTag](
     out.defaultWriteObject()
   }
 
+  private def readBroadcastBlock() {
+    SparkEnv.get.blockManager.getSingle(blockId) match {
+      case Some(x) => value_ = x.asInstanceOf[T]
+      case None => {
+        logInfo("Started reading broadcast variable " + id)
+        val start = System.nanoTime
+        value_ = HttpBroadcast.read[T](id)
+        /*
+         * We cache broadcast data in the BlockManager so that subsequent tasks using it
+         * do not need to re-fetch. This data is only used locally and no other node
+         * needs to fetch this block, so we don't notify the master.
+         */
+        SparkEnv.get.blockManager.putSingle(
+          blockId, value_, StorageLevel.MEMORY_AND_DISK, tellMaster = false)
+        val time = (System.nanoTime - start) / 1e9
+        logInfo("Reading broadcast variable " + id + " took " + time + " s")
+      }
+    }
+    available = true
+  }
+
   /** Used by the JVM when deserializing this object. */
   private def readObject(in: ObjectInputStream) {
     in.defaultReadObject()
-    HttpBroadcast.synchronized {
-      SparkEnv.get.blockManager.getSingle(blockId) match {
-        case Some(x) => value_ = x.asInstanceOf[T]
-        case None => {
-          logInfo("Started reading broadcast variable " + id)
-          val start = System.nanoTime
-          value_ = HttpBroadcast.read[T](id)
-          /*
-           * We cache broadcast data in the BlockManager so that subsequent tasks using it
-           * do not need to re-fetch. This data is only used locally and no other node
-           * needs to fetch this block, so we don't notify the master.
-           */
-          SparkEnv.get.blockManager.putSingle(
-            blockId, value_, StorageLevel.MEMORY_AND_DISK, tellMaster = false)
-          val time = (System.nanoTime - start) / 1e9
-          logInfo("Reading broadcast variable " + id + " took " + time + " s")
-        }
-      }
-    }
+    available = false
   }
 }
 
