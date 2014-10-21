@@ -321,6 +321,8 @@ def launch_cluster(conn, opts, cluster_name):
         master_group.authorize('tcp', 50070, 50070, authorized_address)
         master_group.authorize('tcp', 60070, 60070, authorized_address)
         master_group.authorize('tcp', 4040, 4045, authorized_address)
+        master_group.authorize('tcp', 8088, 8088, authorized_address)
+        master_group.authorize('tcp', 8032, 8032, authorized_address)
         if opts.ganglia:
             master_group.authorize('tcp', 5080, 5080, authorized_address)
     if slave_group.rules == []:  # Group was just now created
@@ -573,17 +575,24 @@ def setup_cluster(conn, master_nodes, slave_nodes, opts, deploy_ssh_key):
             ssh_write(slave.public_dns_name, opts, ['tar', 'x'], dot_ssh_tar)
 
     modules = ['spark', 'shark', 'ephemeral-hdfs', 'persistent-hdfs',
-               'mapreduce', 'spark-standalone', 'tachyon']
+               'mapreduce', 'spark-standalone']
+
 
     if opts.hadoop_major_version == "1":
         modules = filter(lambda x: x != "mapreduce", modules)
+
+    # TODO: Tachyon doesn't work with Hadoop YARN versions right now.
+    # Disable it if we are using YARN
+    if opts.hadoop_major_version != "yarn":
+        modules.append('tachyon')
 
     if opts.ganglia:
         modules.append('ganglia')
 
     # NOTE: We should clone the repository before running deploy_files to
     # prevent ec2-variables.sh from being overwritten
-    ssh(master, opts, "rm -rf spark-ec2 && git clone https://github.com/mesos/spark-ec2.git -b v4")
+    ssh(master, opts,
+        "rm -rf spark-ec2 && git clone https://github.com/shivaram/spark-ec2.git -b v4-yarn")
 
     print "Deploying files to master..."
     deploy_files(conn, "deploy.generic", opts, master_nodes, slave_nodes, modules)
