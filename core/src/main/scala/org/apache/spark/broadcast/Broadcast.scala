@@ -88,7 +88,7 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {
    * Destroy all data and metadata related to this broadcast variable. Use this with caution;
    * once a broadcast variable has been destroyed, it cannot be used again.
    */
-  private[spark] def destroy(blocking: Boolean) {
+  def destroy(blocking: Boolean) {
     assertValid()
     _isValid = false
     doDestroy(blocking)
