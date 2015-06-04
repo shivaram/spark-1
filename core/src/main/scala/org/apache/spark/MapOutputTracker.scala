@@ -21,7 +21,7 @@ import java.io._
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import scala.collection.mutable.{HashSet, Map}
+import scala.collection.mutable.{HashSet, Map, HashMap}
 import scala.collection.JavaConversions._
 import scala.reflect.ClassTag
 
@@ -299,12 +299,12 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf)
     if (!statusByReducer.contains(shuffleId) && mapStatuses.contains(shuffleId)) {
       val statuses = mapStatuses(shuffleId)
       if (statuses.length > 0) {
-        val numReducers = statuses(0).compressedSizes.length
+        val numReducers = statuses(0).numBlocks
         statusByReducer(shuffleId) = new HashMap[Int, Array[(BlockManagerId, Long)]]
         var r = 0
         while (r < numReducers) {
           val locs = statuses.map { s =>
-            (s.location, MapOutputTracker.decompressSize(s.compressedSizes(r)))
+            (s.location, s.getSizeForBlock(r))
           }
           statusByReducer(shuffleId) += (r -> locs)
           r = r + 1

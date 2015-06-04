@@ -126,19 +126,8 @@ class DAGScheduler(
   // This is only safe because DAGScheduler runs in a single thread.
   private val closureSerializer = SparkEnv.get.closureSerializer.newInstance()
 
-
   // Number of preferred locations to use for reducer tasks
   private[scheduler] val NUM_REDUCER_PREF_LOCS = 5
-
-  private def initializeEventProcessActor() {
-    // blocking the thread until supervisor is started, which ensures eventProcessActor is
-    // not null before any job is submitted
-    implicit val timeout = Timeout(30 seconds)
-    val initEventActorReply =
-      dagSchedulerActorSupervisor ? Props(new DAGSchedulerEventProcessActor(this))
-    eventProcessActor = Await.result(initEventActorReply, timeout.duration).
-      asInstanceOf[ActorRef]
-  }
 
   /** If enabled, we may run certain actions like take() and first() locally. */
   private val localExecutionEnabled = sc.getConf.getBoolean("spark.localExecution.enabled", false)

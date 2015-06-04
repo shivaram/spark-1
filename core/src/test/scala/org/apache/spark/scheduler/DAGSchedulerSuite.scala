@@ -513,7 +513,7 @@ class DAGSchedulerSuite
     submit(reduceRdd, Array(0))
 
     val statuses = (1 to numMapTasks).map { i =>
-      (Success, makeMapStatus("host" + i, 1, (10*i).toByte))
+      (Success, makeMapStatus("host" + i, 1, (10*i)))
     }
     complete(taskSets(0), statuses)
 
@@ -855,8 +855,8 @@ class DAGSchedulerSuite
     }
   }
 
-  private def makeMapStatus(host: String, reduces: Int, sizes: Byte = 2): MapStatus =
-   MapStatus(makeBlockManagerId(host), Array.fill[Byte](reduces)(sizes))
+  private def makeMapStatus(host: String, reduces: Int, sizes: Long = 2): MapStatus =
+   MapStatus(makeBlockManagerId(host), Array.fill[Long](reduces)(sizes))
 
   private def makeBlockManagerId(host: String): BlockManagerId =
     BlockManagerId("exec-" + host, host, 12345)
