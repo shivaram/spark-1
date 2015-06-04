@@ -54,7 +54,7 @@
 ...     def zero(self, value):
 ...         return [0.0] * len(value)
 ...     def addInPlace(self, val1, val2):
-...         for i in xrange(len(val1)):
+...         for i in range(len(val1)):
 ...              val1[i] += val2[i]
 ...         return val1
 >>> va = sc.accumulator([1.0, 2.0, 3.0], VectorAccumulatorParam())
@@ -83,15 +83,22 @@ Py4JJavaError:...
 >>> sc.accumulator([1.0, 2.0, 3.0]) # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
     ...
-Exception:...
+TypeError:...
 """
 
+import sys
 import select
 import struct
-import SocketServer
+if sys.version < '3':
+    import SocketServer
+else:
+    import socketserver as SocketServer
 import threading
 from pyspark.cloudpickle import CloudPickler
 from pyspark.serializers import read_int, PickleSerializer
+
+
+__all__ = ['Accumulator', 'AccumulatorParam']
 
 
 pickleSer = PickleSerializer()
@@ -110,6 +117,7 @@ def _deserialize_accumulator(aid, zero_value, accum_param):
 
 
 class Accumulator(object):
+
     """
     A shared variable that can be accumulated, i.e., has a commutative and associative "add"
     operation. Worker tasks on a Spark cluster can add values to an Accumulator with the C{+=}
@@ -166,6 +174,7 @@ class Accumulator(object):
 
 
 class AccumulatorParam(object):
+
     """
     Helper object that defines how to accumulate values of a given type.
     """
@@ -186,6 +195,7 @@ class AccumulatorParam(object):
 
 
 class AddingAccumulatorParam(AccumulatorParam):
+
     """
     An AccumulatorParam that uses the + operators to add values. Designed for simple types
     such as integers, floats, and lists. Requires the zero value for the underlying type
@@ -210,6 +220,7 @@ COMPLEX_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0j)
 
 
 class _UpdateRequestHandler(SocketServer.StreamRequestHandler):
+
     """
     This handler will keep polling updates from the same socket until the
     server is shutdown.
@@ -228,7 +239,9 @@ class _UpdateRequestHandler(SocketServer.StreamRequestHandler):
                 # Write a byte in acknowledgement
                 self.wfile.write(struct.pack("!b", 1))
 
+
 class AccumulatorServer(SocketServer.TCPServer):
+
     """
     A simple TCP server that intercepts shutdown() in order to interrupt
     our continuous polling on the handler.
@@ -238,6 +251,8 @@ class AccumulatorServer(SocketServer.TCPServer):
     def shutdown(self):
         self.server_shutdown = True
         SocketServer.TCPServer.shutdown(self)
+        self.server_close()
+
 
 def _start_update_server():
     """Start a TCP server to receive accumulator updates in a daemon thread, and returns it"""
@@ -246,3 +261,7 @@ def _start_update_server():
     thread.daemon = True
     thread.start()
     return server
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()

@@ -17,25 +17,28 @@
 
 package org.apache.spark.sql.catalyst.analysis
 
-import org.scalatest.FunSuite
+import org.apache.spark.sql.catalyst.plans.PlanTest
 
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, LocalRelation, Project}
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.types._
 
-class HiveTypeCoercionSuite extends FunSuite {
+class HiveTypeCoercionSuite extends PlanTest {
 
-  val rules = new HiveTypeCoercion { }
-  import rules._
-
-  test("tightest common bound for numeric and boolean types") {
+  test("tightest common bound for types") {
     def widenTest(t1: DataType, t2: DataType, tightestCommon: Option[DataType]) {
-      var found = WidenTypes.findTightestCommonType(t1, t2)
+      var found = HiveTypeCoercion.findTightestCommonTypeOfTwo(t1, t2)
       assert(found == tightestCommon,
         s"Expected $tightestCommon as tightest common type for $t1 and $t2, found $found")
       // Test both directions to make sure the widening is symmetric.
-      found = WidenTypes.findTightestCommonType(t2, t1)
+      found = HiveTypeCoercion.findTightestCommonTypeOfTwo(t2, t1)
       assert(found == tightestCommon,
         s"Expected $tightestCommon as tightest common type for $t2 and $t1, found $found")
     }
+
+    // Null
+    widenTest(NullType, NullType, Some(NullType))
 
     // Boolean
     widenTest(NullType, BooleanType, Some(BooleanType))
@@ -60,12 +63,106 @@ class HiveTypeCoercionSuite extends FunSuite {
     widenTest(DoubleType, DoubleType, Some(DoubleType))
 
     // Integral mixed with floating point.
-    widenTest(NullType, FloatType, Some(FloatType))
-    widenTest(NullType, DoubleType, Some(DoubleType))
     widenTest(IntegerType, FloatType, Some(FloatType))
     widenTest(IntegerType, DoubleType, Some(DoubleType))
     widenTest(IntegerType, DoubleType, Some(DoubleType))
     widenTest(LongType, FloatType, Some(FloatType))
     widenTest(LongType, DoubleType, Some(DoubleType))
+
+    // Casting up to unlimited-precision decimal
+    widenTest(IntegerType, DecimalType.Unlimited, Some(DecimalType.Unlimited))
+    widenTest(DoubleType, DecimalType.Unlimited, Some(DecimalType.Unlimited))
+    widenTest(DecimalType(3, 2), DecimalType.Unlimited, Some(DecimalType.Unlimited))
+    widenTest(DecimalType.Unlimited, IntegerType, Some(DecimalType.Unlimited))
+    widenTest(DecimalType.Unlimited, DoubleType, Some(DecimalType.Unlimited))
+    widenTest(DecimalType.Unlimited, DecimalType(3, 2), Some(DecimalType.Unlimited))
+
+    // No up-casting for fixed-precision decimal (this is handled by arithmetic rules)
+    widenTest(DecimalType(2, 1), DecimalType(3, 2), None)
+    widenTest(DecimalType(2, 1), DoubleType, None)
+    widenTest(DecimalType(2, 1), IntegerType, None)
+    widenTest(DoubleType, DecimalType(2, 1), None)
+    widenTest(IntegerType, DecimalType(2, 1), None)
+
+    // StringType
+    widenTest(NullType, StringType, Some(StringType))
+    widenTest(StringType, StringType, Some(StringType))
+    widenTest(IntegerType, StringType, None)
+    widenTest(LongType, StringType, None)
+
+    // TimestampType
+    widenTest(NullType, TimestampType, Some(TimestampType))
+    widenTest(TimestampType, TimestampType, Some(TimestampType))
+    widenTest(IntegerType, TimestampType, None)
+    widenTest(StringType, TimestampType, None)
+
+    // ComplexType
+    widenTest(NullType,
+      MapType(IntegerType, StringType, false),
+      Some(MapType(IntegerType, StringType, false)))
+    widenTest(NullType, StructType(Seq()), Some(StructType(Seq())))
+    widenTest(StringType, MapType(IntegerType, StringType, true), None)
+    widenTest(ArrayType(IntegerType), StructType(Seq()), None)
+  }
+
+  private def ruleTest(rule: Rule[LogicalPlan], initial: Expression, transformed: Expression) {
+    val testRelation = LocalRelation(AttributeReference("a", IntegerType)())
+    comparePlans(
+      rule(Project(Seq(Alias(initial, "a")()), testRelation)),
+      Project(Seq(Alias(transformed, "a")()), testRelation))
+  }
+
+  test("coalesce casts") {
+    val fac = new HiveTypeCoercion { }.FunctionArgumentConversion
+    ruleTest(fac,
+      Coalesce(Literal(1.0)
+        :: Literal(1)
+        :: Literal.create(1.0, FloatType)
+        :: Nil),
+      Coalesce(Cast(Literal(1.0), DoubleType)
+        :: Cast(Literal(1), DoubleType)
+        :: Cast(Literal.create(1.0, FloatType), DoubleType)
+        :: Nil))
+    ruleTest(fac,
+      Coalesce(Literal(1L)
+        :: Literal(1)
+        :: Literal(new java.math.BigDecimal("1000000000000000000000"))
+        :: Nil),
+      Coalesce(Cast(Literal(1L), DecimalType())
+        :: Cast(Literal(1), DecimalType())
+        :: Cast(Literal(new java.math.BigDecimal("1000000000000000000000")), DecimalType())
+        :: Nil))
+  }
+
+  test("type coercion for CaseKeyWhen") {
+    val cwc = new HiveTypeCoercion {}.CaseWhenCoercion
+    ruleTest(cwc,
+      CaseKeyWhen(Literal(1.toShort), Seq(Literal(1), Literal("a"))),
+      CaseKeyWhen(Cast(Literal(1.toShort), IntegerType), Seq(Literal(1), Literal("a")))
+    )
+    ruleTest(cwc,
+      CaseKeyWhen(Literal(true), Seq(Literal(1), Literal("a"))),
+      CaseKeyWhen(Literal(true), Seq(Literal(1), Literal("a")))
+    )
+  }
+
+  test("type coercion simplification for equal to") {
+    val be = new HiveTypeCoercion {}.BooleanEqualization
+    ruleTest(be,
+      EqualTo(Literal(true), Literal(1)),
+      Literal(true)
+    )
+    ruleTest(be,
+      EqualTo(Literal(true), Literal(0)),
+      Not(Literal(true))
+    )
+    ruleTest(be,
+      EqualNullSafe(Literal(true), Literal(1)),
+      And(IsNotNull(Literal(true)), Literal(true))
+    )
+    ruleTest(be,
+      EqualNullSafe(Literal(true), Literal(0)),
+      And(IsNotNull(Literal(true)), Not(Literal(true)))
+    )
   }
 }

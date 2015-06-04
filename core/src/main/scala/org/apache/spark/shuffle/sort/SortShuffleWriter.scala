@@ -17,33 +17,26 @@
 
 package org.apache.spark.shuffle.sort
 
-import java.io.{BufferedOutputStream, File, FileOutputStream, DataOutputStream}
-
-import org.apache.spark.{MapOutputTracker, SparkEnv, Logging, TaskContext}
+import org.apache.spark._
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.serializer.Serializer
-import org.apache.spark.shuffle.{ShuffleWriter, BaseShuffleHandle}
+import org.apache.spark.shuffle.{IndexShuffleBlockResolver, ShuffleWriter, BaseShuffleHandle}
 import org.apache.spark.storage.ShuffleBlockId
 import org.apache.spark.util.collection.ExternalSorter
 
 private[spark] class SortShuffleWriter[K, V, C](
+    shuffleBlockResolver: IndexShuffleBlockResolver,
     handle: BaseShuffleHandle[K, V, C],
     mapId: Int,
     context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
-  private val numPartitions = dep.partitioner.numPartitions
 
   private val blockManager = SparkEnv.get.blockManager
-  private val ser = Serializer.getSerializer(dep.serializer.orNull)
 
-  private val conf = SparkEnv.get.conf
-  private val fileBufferSize = conf.getInt("spark.shuffle.file.buffer.kb", 100) * 1024
-
-  private var sorter: ExternalSorter[K, V, _] = null
-  private var outputFile: File = null
+  private var sorter: SortShuffleFileWriter[K, V] = null
 
   // Are we in the process of stopping? Because map tasks can call stop() with success = true
   // and then call stop() with success = false if they get an exception, we want to make sure
@@ -52,89 +45,42 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   private var mapStatus: MapStatus = null
 
+  private val writeMetrics = new ShuffleWriteMetrics()
+  context.taskMetrics.shuffleWriteMetrics = Some(writeMetrics)
+
   /** Write a bunch of records to this task's output */
-  override def write(records: Iterator[_ <: Product2[K, V]]): Unit = {
-    // Get an iterator with the elements for each partition ID
-    val partitions: Iterator[(Int, Iterator[Product2[K, _]])] = {
-      if (dep.mapSideCombine) {
-        if (!dep.aggregator.isDefined) {
-          throw new IllegalStateException("Aggregator is empty for map-side combine")
-        }
-        sorter = new ExternalSorter[K, V, C](
-          dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
-        sorter.write(records)
-        sorter.partitionedIterator
-      } else {
-        // In this case we pass neither an aggregator nor an ordering to the sorter, because we
-        // don't care whether the keys get sorted in each partition; that will be done on the
-        // reduce side if the operation being run is sortByKey.
-        sorter = new ExternalSorter[K, V, V](
-          None, Some(dep.partitioner), None, dep.serializer)
-        sorter.write(records)
-        sorter.partitionedIterator
-      }
+  override def write(records: Iterator[Product2[K, V]]): Unit = {
+    sorter = if (dep.mapSideCombine) {
+      require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
+      new ExternalSorter[K, V, C](
+        dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
+    } else if (SortShuffleWriter.shouldBypassMergeSort(
+        SparkEnv.get.conf, dep.partitioner.numPartitions, aggregator = None, keyOrdering = None)) {
+      // If there are fewer than spark.shuffle.sort.bypassMergeThreshold partitions and we don't
+      // need local aggregation and sorting, write numPartitions files directly and just concatenate
+      // them at the end. This avoids doing serialization and deserialization twice to merge
+      // together the spilled files, which would happen with the normal code path. The downside is
+      // having multiple files open at a time and thus more memory allocated to buffers.
+      new BypassMergeSortShuffleWriter[K, V](SparkEnv.get.conf, blockManager, dep.partitioner,
+        writeMetrics, Serializer.getSerializer(dep.serializer))
+    } else {
+      // In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
+      // care whether the keys get sorted in each partition; that will be done on the reduce side
+      // if the operation being run is sortByKey.
+      new ExternalSorter[K, V, V](
+        aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
+    sorter.insertAll(records)
 
-    // Create a single shuffle file with reduce ID 0 that we'll write all results to. We'll later
-    // serve different ranges of this file using an index file that we create at the end.
-    val blockId = ShuffleBlockId(dep.shuffleId, mapId, 0)
-    outputFile = blockManager.diskBlockManager.getFile(blockId)
+    // Don't bother including the time to open the merged output file in the shuffle write time,
+    // because it just opens a single file, so is typically too fast to measure accurately
+    // (see SPARK-3570).
+    val outputFile = shuffleBlockResolver.getDataFile(dep.shuffleId, mapId)
+    val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
+    val partitionLengths = sorter.writePartitionedFile(blockId, context, outputFile)
+    shuffleBlockResolver.writeIndexFile(dep.shuffleId, mapId, partitionLengths)
 
-    // Track location of each range in the output file
-    val offsets = new Array[Long](numPartitions + 1)
-    val lengths = new Array[Long](numPartitions)
-
-    // Statistics
-    var totalBytes = 0L
-    var totalTime = 0L
-
-    for ((id, elements) <- partitions) {
-      if (elements.hasNext) {
-        val writer = blockManager.getDiskWriter(blockId, outputFile, ser, fileBufferSize)
-        for (elem <- elements) {
-          writer.write(elem)
-        }
-        writer.commitAndClose()
-        val segment = writer.fileSegment()
-        offsets(id + 1) = segment.offset + segment.length
-        lengths(id) = segment.length
-        totalTime += writer.timeWriting()
-        totalBytes += segment.length
-      } else {
-        // The partition is empty; don't create a new writer to avoid writing headers, etc
-        offsets(id + 1) = offsets(id)
-      }
-    }
-
-    val shuffleMetrics = new ShuffleWriteMetrics
-    shuffleMetrics.shuffleBytesWritten = totalBytes
-    shuffleMetrics.shuffleWriteTime = totalTime
-    context.taskMetrics.shuffleWriteMetrics = Some(shuffleMetrics)
-    context.taskMetrics.memoryBytesSpilled += sorter.memoryBytesSpilled
-    context.taskMetrics.diskBytesSpilled += sorter.diskBytesSpilled
-
-    // Write an index file with the offsets of each block, plus a final offset at the end for the
-    // end of the output file. This will be used by SortShuffleManager.getBlockLocation to figure
-    // out where each block begins and ends.
-
-    val diskBlockManager = blockManager.diskBlockManager
-    val indexFile = diskBlockManager.getFile(blockId.name + ".index")
-    val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexFile)))
-    try {
-      var i = 0
-      while (i < numPartitions + 1) {
-        out.writeLong(offsets(i))
-        i += 1
-      }
-    } finally {
-      out.close()
-    }
-
-    // Register our map output with the ShuffleBlockManager, which handles cleaning it over time
-    blockManager.shuffleBlockManager.addCompletedMap(dep.shuffleId, mapId, numPartitions)
-
-    mapStatus = new MapStatus(blockManager.blockManagerId,
-      lengths.map(MapOutputTracker.compressSize))
+    mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
   }
 
   /** Close this writer, passing along whether the map completed */
@@ -147,18 +93,30 @@ private[spark] class SortShuffleWriter[K, V, C](
       if (success) {
         return Option(mapStatus)
       } else {
-        // The map task failed, so delete our output file if we created one
-        if (outputFile != null) {
-          outputFile.delete()
-        }
+        // The map task failed, so delete our output data.
+        shuffleBlockResolver.removeDataByMap(dep.shuffleId, mapId)
         return None
       }
     } finally {
       // Clean up our sorter, which may have its own intermediate files
       if (sorter != null) {
+        val startTime = System.nanoTime()
         sorter.stop()
+        context.taskMetrics.shuffleWriteMetrics.foreach(
+          _.incShuffleWriteTime(System.nanoTime - startTime))
         sorter = null
       }
     }
+  }
+}
+
+private[spark] object SortShuffleWriter {
+  def shouldBypassMergeSort(
+      conf: SparkConf,
+      numPartitions: Int,
+      aggregator: Option[Aggregator[_, _, _]],
+      keyOrdering: Option[Ordering[_]]): Boolean = {
+    val bypassMergeThreshold: Int = conf.getInt("spark.shuffle.sort.bypassMergeThreshold", 200)
+    numPartitions <= bypassMergeThreshold && aggregator.isEmpty && keyOrdering.isEmpty
   }
 }

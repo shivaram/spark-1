@@ -19,7 +19,7 @@ package org.apache.spark.sql.catalyst.plans.physical
 
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.expressions.{Expression, Row, SortOrder}
-import org.apache.spark.sql.catalyst.types.IntegerType
+import org.apache.spark.sql.types.{DataType, IntegerType}
 
 /**
  * Specifies how tuples that share common expressions will be distributed when a query is executed
@@ -71,7 +71,8 @@ case class OrderedDistribution(ordering: Seq[SortOrder]) extends Distribution {
       "An AllTuples should be used to represent a distribution that only has " +
       "a single partition.")
 
-  def clustering = ordering.map(_.child).toSet
+  // TODO: This is not really valid...
+  def clustering: Set[Expression] = ordering.map(_.child).toSet
 }
 
 sealed trait Partitioning {
@@ -93,6 +94,9 @@ sealed trait Partitioning {
    * only compatible if the `numPartitions` of them is the same.
    */
   def compatibleWith(other: Partitioning): Boolean
+
+  /** Returns the expressions that are used to key the partitioning. */
+  def keyExpressions: Seq[Expression]
 }
 
 case class UnknownPartitioning(numPartitions: Int) extends Partitioning {
@@ -105,6 +109,8 @@ case class UnknownPartitioning(numPartitions: Int) extends Partitioning {
     case UnknownPartitioning(_) => true
     case _ => false
   }
+
+  override def keyExpressions: Seq[Expression] = Nil
 }
 
 case object SinglePartition extends Partitioning {
@@ -112,10 +118,12 @@ case object SinglePartition extends Partitioning {
 
   override def satisfies(required: Distribution): Boolean = true
 
-  override def compatibleWith(other: Partitioning) = other match {
+  override def compatibleWith(other: Partitioning): Boolean = other match {
     case SinglePartition => true
     case _ => false
   }
+
+  override def keyExpressions: Seq[Expression] = Nil
 }
 
 case object BroadcastPartitioning extends Partitioning {
@@ -123,10 +131,12 @@ case object BroadcastPartitioning extends Partitioning {
 
   override def satisfies(required: Distribution): Boolean = true
 
-  override def compatibleWith(other: Partitioning) = other match {
+  override def compatibleWith(other: Partitioning): Boolean = other match {
     case SinglePartition => true
     case _ => false
   }
+
+  override def keyExpressions: Seq[Expression] = Nil
 }
 
 /**
@@ -138,10 +148,9 @@ case class HashPartitioning(expressions: Seq[Expression], numPartitions: Int)
   extends Expression
   with Partitioning {
 
-  override def children = expressions
-  override def references = expressions.flatMap(_.references).toSet
-  override def nullable = false
-  override def dataType = IntegerType
+  override def children: Seq[Expression] = expressions
+  override def nullable: Boolean = false
+  override def dataType: DataType = IntegerType
 
   private[this] lazy val clusteringSet = expressions.toSet
 
@@ -152,13 +161,15 @@ case class HashPartitioning(expressions: Seq[Expression], numPartitions: Int)
     case _ => false
   }
 
-  override def compatibleWith(other: Partitioning) = other match {
+  override def compatibleWith(other: Partitioning): Boolean = other match {
     case BroadcastPartitioning => true
     case h: HashPartitioning if h == this => true
     case _ => false
   }
 
-  override def eval(input: Row = null): EvaluatedType =
+  override def keyExpressions: Seq[Expression] = expressions
+
+  override def eval(input: Row = null): Any =
     throw new TreeNodeException(this, s"No function to evaluate expression. type: ${this.nodeName}")
 }
 
@@ -178,10 +189,9 @@ case class RangePartitioning(ordering: Seq[SortOrder], numPartitions: Int)
   extends Expression
   with Partitioning {
 
-  override def children = ordering
-  override def references = ordering.flatMap(_.references).toSet
-  override def nullable = false
-  override def dataType = IntegerType
+  override def children: Seq[SortOrder] = ordering
+  override def nullable: Boolean = false
+  override def dataType: DataType = IntegerType
 
   private[this] lazy val clusteringSet = ordering.map(_.child).toSet
 
@@ -195,12 +205,14 @@ case class RangePartitioning(ordering: Seq[SortOrder], numPartitions: Int)
     case _ => false
   }
 
-  override def compatibleWith(other: Partitioning) = other match {
+  override def compatibleWith(other: Partitioning): Boolean = other match {
     case BroadcastPartitioning => true
     case r: RangePartitioning if r == this => true
     case _ => false
   }
 
-  override def eval(input: Row): EvaluatedType =
+  override def keyExpressions: Seq[Expression] = ordering.map(_.child)
+
+  override def eval(input: Row): Any =
     throw new TreeNodeException(this, s"No function to evaluate expression. type: ${this.nodeName}")
 }
