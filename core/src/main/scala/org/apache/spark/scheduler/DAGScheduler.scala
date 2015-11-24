@@ -144,9 +144,9 @@ class DAGScheduler(
   // Number of map, reduce tasks above which we do not assign preferred locations
   // based on map output sizes. We limit the size of jobs for which assign preferred locations
   // as computing the top locations by size becomes expensive.
-  private[this] val SHUFFLE_PREF_MAP_THRESHOLD = 1000
+  private[this] val SHUFFLE_PREF_MAP_THRESHOLD = 2000
   // NOTE: This should be less than 2000 as we use HighlyCompressedMapStatus beyond that
-  private[this] val SHUFFLE_PREF_REDUCE_THRESHOLD = 1000
+  private[this] val SHUFFLE_PREF_REDUCE_THRESHOLD = 2000
 
   // Fraction of total map output that must be at a location for it to considered as a preferred
   // location for a reduce task.
@@ -1373,6 +1373,8 @@ class DAGScheduler(
           val topLocsForReducer = mapOutputTracker.getLocationsWithLargestOutputs(s.shuffleId,
             partition, rdd.partitions.size, REDUCER_PREF_LOCS_FRACTION)
           if (topLocsForReducer.nonEmpty) {
+            logInfo("Setting reduce pref for shuffle " + s.shuffleId + " partition " + partition
+              + " " + topLocsForReducer.get.size)
             return topLocsForReducer.get.map(loc => TaskLocation(loc.host, loc.executorId))
           }
         }
