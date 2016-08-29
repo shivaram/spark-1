@@ -232,7 +232,7 @@ div.tocify {
 <pre class="r"><code>Sys.setenv(SPARK_HOME = &quot;/HOME/spark&quot;)</code></pre>
 <p><code>SparkSession</code> is the entry point into SparkR which connects your R program to a Spark cluster. You can create a <code>SparkSession</code> using <code>sparkR.session</code> and pass in options such as the application name, any spark packages depended on, etc. We use default settings.</p>
 <pre class="r"><code>sparkR.session()</code></pre>
-<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpeT0MWK/backend_porte4fe18a2b624</code></pre>
+<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpSd9rnP/backend_portec4f7595e99f</code></pre>
 <pre><code>## Java ref type org.apache.spark.sql.SparkSession id 1</code></pre>
 <p>The operations in SparkR are centered around an R object class called <code>SparkDataFrame</code>. It is a distributed collection of data organized into named columns, which is conceptually equivalent to a table in a relational database or a data frame in R, but with richer optimizations under the hood.</p>
 <p><code>SparkDataFrame</code> can be constructed from a wide array of sources such as: structured data files, tables in Hive, external databases, or existing local R data frames. For example, we create a <code>SparkDataFrame</code> from a local R data frame,</p>
@@ -317,7 +317,7 @@ class(carsGP)</code></pre>
 ## AIC: 156
 ## 
 ## Number of Fisher Scoring iterations: 1</code></pre>
-<p>The model can be saved by <code>write.ml</code> and can be loaded for future use by <code>read.ml</code>.</p>
+<p>The model can be saved by <code>write.ml</code> and loaded back using <code>read.ml</code>.</p>
 <pre class="r"><code>write.ml(model, path = &quot;/HOME/tmp/mlModel/glmModel&quot;)</code></pre>
 </div>
 <div id="data-import" class="section level2">
@@ -342,7 +342,7 @@ head(df)</code></pre>
 <pre class="r"><code>sparkR.session(sparkPackages = &quot;com.databricks:spark-avro_2.11:3.0.0&quot;)</code></pre>
 <p>We can see how to use data sources using an example JSON input file. Note that the file that is used here is not a typical JSON file. Each line in the file must contain a separate, self-contained valid JSON object. As a consequence, a regular multi-line JSON file will most often fail.</p>
 <pre class="r"><code>people &lt;- read.df(paste0(Sys.getenv(&quot;SPARK_HOME&quot;), 
-                            &quot;/examples/src/main/resources/people.json&quot;), &quot;json&quot;)
+                         &quot;/examples/src/main/resources/people.json&quot;), &quot;json&quot;)
 count(people)</code></pre>
 <pre><code>## [1] 3</code></pre>
 <pre class="r"><code>head(people)</code></pre>
@@ -383,6 +383,83 @@ head(results)</code></pre>
 </div>
 <div id="data-processing" class="section level2">
 <h2>Data Processing</h2>
+<p><strong>To dplyr users</strong>: There is one main difference in the current version of SparkR we need to be careful about. To indicate a column <code>col</code> in a <code>SparkDataFrame</code> <code>df</code>, we should use <code>df$col</code> in most cases and sometimes can use <code>&quot;col&quot;</code>. A general principle is when it involves a condition on the column or multiple <code>SparkDataFrame</code>s, we should use the former syntax. For example,</p>
+<table style="width:26%;">
+<colgroup>
+<col width="12%"></col>
+<col width="13%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th>dplyr</th>
+<th>SparkR</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>select(mtcars, mpg, hp)</code></td>
+<td><code>select(carsDF, &quot;mpg&quot;, &quot;hp&quot;)</code></td>
+</tr>
+<tr class="even">
+<td><code>filter(mtcars, mpg &gt; 20, hp &gt; 100)</code></td>
+<td><code>filter(carsDF, carsDF$mpg &gt; 20, carsDF$hp &gt; 100)</code></td>
+</tr>
+</tbody>
+</table>
+<p>We use the <code>SparkDataFrame</code> <code>carsDF</code> created above.</p>
+<p>We can get basic information about the <code>SparkDataFrame</code>.</p>
+<pre class="r"><code>carsDF</code></pre>
+<pre><code>## SparkDataFrame[model:string, mpg:double, cyl:double, disp:double, hp:double, drat:double, wt:double, qsec:double, vs:double, am:double, gear:double, carb:double]</code></pre>
+<p>Print out the schema in tree format.</p>
+<pre class="r"><code>printSchema(carsDF)</code></pre>
+<pre><code>## root
+##  |-- model: string (nullable = true)
+##  |-- mpg: double (nullable = true)
+##  |-- cyl: double (nullable = true)
+##  |-- disp: double (nullable = true)
+##  |-- hp: double (nullable = true)
+##  |-- drat: double (nullable = true)
+##  |-- wt: double (nullable = true)
+##  |-- qsec: double (nullable = true)
+##  |-- vs: double (nullable = true)
+##  |-- am: double (nullable = true)
+##  |-- gear: double (nullable = true)
+##  |-- carb: double (nullable = true)</code></pre>
+<p><strong>To dplyr users</strong>: One main difference SparkR has with dplyr is instead</p>
+<div id="single-table-verbs" class="section level3">
+<h3>Single Table Verbs</h3>
+<div id="filter" class="section level4">
+<h4>filter</h4>
+<p><code>filter</code> allows you to select a subset of rows based on given conditions</p>
+<p>Select only the “eruptions” column.</p>
+<pre class="r"><code>head(select(carsDF, carsDF$mpg))</code></pre>
+<pre><code>##    mpg
+## 1 21.0
+## 2 21.0
+## 3 22.8
+## 4 21.4
+## 5 18.7
+## 6 18.1</code></pre>
+<p>You can also pass in column name as strings.</p>
+<pre class="r"><code>head(select(carsDF, &quot;mpg&quot;))</code></pre>
+<pre><code>##    mpg
+## 1 21.0
+## 2 21.0
+## 3 22.8
+## 4 21.4
+## 5 18.7
+## 6 18.1</code></pre>
+<p>Filter the SparkDataFrame to only retain rows with wait times shorter than 50 mins.</p>
+<pre class="r"><code>head(filter(carsDF, carsDF$mpg &lt; 20))</code></pre>
+<pre><code>##               model  mpg cyl  disp  hp drat   wt  qsec vs am gear carb
+## 1 Hornet Sportabout 18.7   8 360.0 175 3.15 3.44 17.02  0  0    3    2
+## 2           Valiant 18.1   6 225.0 105 2.76 3.46 20.22  1  0    3    1
+## 3        Duster 360 14.3   8 360.0 245 3.21 3.57 15.84  0  0    3    4
+## 4          Merc 280 19.2   6 167.6 123 3.92 3.44 18.30  1  0    4    4
+## 5         Merc 280C 17.8   6 167.6 123 3.92 3.44 18.90  1  0    4    4
+## 6        Merc 450SE 16.4   8 275.8 180 3.07 4.07 17.40  0  0    3    3</code></pre>
+</div>
+</div>
 </div>
 <div id="window-functions" class="section level2">
 <h2>Window Functions</h2>
@@ -683,26 +760,26 @@ df &lt;- createDataFrame(data)
 gmmModel &lt;- spark.gaussianMixture(df, ~ V1 + V2, k = 2)
 summary(gmmModel)</code></pre>
 <pre><code>## $lambda
-## [1] 0.501369 0.498631
+## [1] 0.4 0.6
 ## 
 ## $mu
 ## $mu[[1]]
-## [1] 0.8853913 0.1668820
+## [1] 0.1354064 0.3826231
 ## 
 ## $mu[[2]]
-## [1] 2.387588 3.922921
+## [1] 3.021579 4.372561
 ## 
 ## 
 ## $sigma
 ## $sigma[[1]]
-##      [,1]     [,2]    
-## [1,] 1.895942 2.319384
-## [2,] 2.319384 3.742279
+##      [,1]       [,2]      
+## [1,] 1.98939    -0.8800996
+## [2,] -0.8800996 0.5530281 
 ## 
 ## $sigma[[2]]
-##      [,1]       [,2]      
-## [1,] 0.4773062  -0.1289048
-## [2,] -0.1289048 0.03514511
+##      [,1]      [,2]     
+## [1,] 0.1573122 0.1739219
+## [2,] 0.1739219 0.6611829
 ## 
 ## 
 ## $posterior
@@ -712,20 +789,20 @@ summary(gmmModel)</code></pre>
 ## [1] FALSE</code></pre>
 <pre class="r"><code>gmmFitted &lt;- predict(gmmModel, df)
 showDF(select(gmmFitted, &quot;V1&quot;, &quot;V2&quot;, &quot;prediction&quot;))</code></pre>
-<pre><code>## +--------------------+--------------------+----------+
-## |                  V1|                  V2|prediction|
-## +--------------------+--------------------+----------+
-## | 0.20262962318066383|  0.3350607188375435|         0|
-## |-0.23397006426378042|-0.39577356229562743|         0|
-## |  0.8160288623828101| -1.4384622971995344|         0|
-## | 0.07168859643341127| -1.4808895015668353|         0|
-## |  1.4656897332631214|   4.164341915806251|         1|
-## |   2.689488937226641|   3.810799429017234|         1|
-## |  2.1854236380674985|   3.982616398586911|         1|
-## |   2.074467831819921|   4.031076942228774|         1|
-## |  3.5318831851021004|  3.6232356155475767|         1|
-## |  3.5410022916395594|   3.765588805710477|         0|
-## +--------------------+--------------------+----------+</code></pre>
+<pre><code>## +-------------------+-------------------+----------+
+## |                 V1|                 V2|prediction|
+## +-------------------+-------------------+----------+
+## |-1.5500701782887587| 1.3315685851110417|         0|
+## | 0.7185290541726932| 0.6644450266209627|         0|
+## |  2.130381222048295|-0.7199961639640005|         0|
+## |-0.7572144215752278| 0.2544748109445785|         0|
+## |  2.484725198733279| 3.8303265074624733|         1|
+## |   2.72600073095808|  5.185982856972473|         1|
+## | 3.1391024819419644| 4.0374438370557115|         1|
+## |  2.922051022519514|  3.224125181055697|         1|
+## |  3.755081689852016| 5.6288589060038845|         1|
+## | 3.1025134801701855|  4.328629145757465|         1|
+## +-------------------+-------------------+----------+</code></pre>
 </div>
 <div id="latent-dirichlet-allocation" class="section level4">
 <h4>Latent Dirichlet Allocation</h4>
@@ -774,16 +851,16 @@ corpusDF &lt;- createDataFrame(corpus)
 model &lt;- spark.lda(data = corpusDF, k = 5, optimizer = &quot;em&quot;)
 summary(model)</code></pre>
 <pre><code>## $docConcentration
-## [1] 0.1666605 0.2475237 0.1666309 0.1666346 0.1680842
+## [1] 0.1666625 0.2475252 0.1666325 0.1666364 0.1680930
 ## 
 ## $topicConcentration
 ## [1] 0.2
 ## 
 ## $logLikelihood
-## [1] -318.7382
+## [1] -318.7388
 ## 
 ## $logPerplexity
-## [1] 2.414683
+## [1] 2.414688
 ## 
 ## $isDistributed
 ## [1] FALSE
@@ -806,15 +883,15 @@ head(posterior)</code></pre>
 ## 5 3 1 1 9 3 0 2 0 0 1 3
 ## 6 4 2 0 3 4 5 1 1 1 4 0
 ##                                            topicDistribution
-## 1 0.01409421, 0.94353681, 0.01407445, 0.01409081, 0.01420373
-## 2 0.01402459, 0.94375436, 0.01402788, 0.01402871, 0.01416446
-## 3 0.01406863, 0.94356847, 0.01405967, 0.01405504, 0.01424819
-## 4 0.01404846, 0.94366731, 0.01405292, 0.01404973, 0.01418158
-## 5 0.01403968, 0.94370497, 0.01404161, 0.01404284, 0.01417090
-## 6 0.01409275, 0.94339373, 0.01409599, 0.01408879, 0.01432874</code></pre>
+## 1 0.01409444, 0.94353599, 0.01407458, 0.01409048, 0.01420451
+## 2 0.01402474, 0.94375252, 0.01402839, 0.01402891, 0.01416544
+## 3 0.01406878, 0.94356737, 0.01405979, 0.01405519, 0.01424887
+## 4 0.01404847, 0.94367024, 0.01405266, 0.01404983, 0.01417881
+## 5 0.01403983, 0.94370390, 0.01404169, 0.01404302, 0.01417156
+## 6 0.01409289, 0.94340237, 0.01409610, 0.01408893, 0.01431972</code></pre>
 <pre class="r"><code>perplexity &lt;- spark.perplexity(model, corpusDF)
 perplexity</code></pre>
-<pre><code>## [1] 2.414683</code></pre>
+<pre><code>## [1] 2.414688</code></pre>
 </div>
 <div id="multilayer-perceptron" class="section level4">
 <h4>Multilayer Perceptron</h4>
@@ -844,7 +921,7 @@ f(z_i) = \frac{e^{z_i}}{\sum_{k=1}^N e^{z_k}}.
 </div>
 <div id="isotonic-regression-model" class="section level4">
 <h4>Isotonic Regression Model</h4>
-<p><code>spark.isoreg</code> fits an <a href="https://en.wikipedia.org/wiki/Isotonic_regression">Isotonic Regression</a> model against a <code>SparkDataFrame</code>. It solves a weighted univariate a regression problem under a complete order constraint. Specifically, given a set of real observed responses <span class="math inline">\(y_1, \ldots, y_n\)</span>, corresponding real features <span class="math inline">\(x_1, \ldots, x_n\)</span>, and optionally positive weights <span class="math inline">\(w_1, \ldots, w_n\)</span>, we want to find a monotone (piecewise) function <span class="math inline">\(f\)</span> to minimize <span class="math display">\[
+<p><code>spark.isoreg</code> fits an <a href="https://en.wikipedia.org/wiki/Isotonic_regression">Isotonic Regression</a> model against a <code>SparkDataFrame</code>. It solves a weighted univariate a regression problem under a complete order constraint. Specifically, given a set of real observed responses <span class="math inline">\(y_1, \ldots, y_n\)</span>, corresponding real features <span class="math inline">\(x_1, \ldots, x_n\)</span>, and optionally positive weights <span class="math inline">\(w_1, \ldots, w_n\)</span>, we want to find a monotone (piecewise linear) function <span class="math inline">\(f\)</span> to minimize <span class="math display">\[
 \ell(f) = \sum_{i=1}^n w_i (y_i - f(x_i))^2.
 \]</span></p>
 <p>There are a few more arguments that may be useful.</p>

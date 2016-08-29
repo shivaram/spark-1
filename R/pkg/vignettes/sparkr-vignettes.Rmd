@@ -91,7 +91,7 @@ model <- spark.glm(carsDF, mpg ~ wt + cyl)
 summary(model)
 ```
 
-The model can be saved by `write.ml` and can be loaded for future use by `read.ml`.
+The model can be saved by `write.ml` and loaded back using `read.ml`.
 ```{r, eval=FALSE}
 write.ml(model, path = "/HOME/tmp/mlModel/glmModel")
 ```
@@ -118,7 +118,7 @@ We can see how to use data sources using an example JSON input file. Note that t
 
 ```{r}
 people <- read.df(paste0(Sys.getenv("SPARK_HOME"), 
-                            "/examples/src/main/resources/people.json"), "json")
+                         "/examples/src/main/resources/people.json"), "json")
 count(people)
 head(people)
 ```
@@ -162,6 +162,48 @@ head(results)
 
 
 ## Data Processing
+
+**To dplyr users**: There is one main difference in the current version of SparkR  we need to be careful about. To indicate a column `col` in a `SparkDataFrame` `df`, we should use `df$col` in most cases and sometimes can use `"col"`. A general principle is when it involves a condition on the column or multiple `SparkDataFrame`s, we should use the former syntax. For example,
+
+dplyr | SparkR
+-------- | ---------
+`select(mtcars, mpg, hp)` | `select(carsDF, "mpg", "hp")` 
+`filter(mtcars, mpg > 20, hp > 100)` | `filter(carsDF, carsDF$mpg > 20, carsDF$hp > 100)`
+
+We use the `SparkDataFrame` `carsDF` created above.
+
+We can get basic information about the `SparkDataFrame`.
+```{r}
+carsDF
+```
+
+Print out the schema in tree format.
+```{r}
+printSchema(carsDF)
+```
+
+**To dplyr users**: One main difference SparkR has with dplyr is instead 
+
+### Single Table Verbs
+
+#### filter
+
+`filter` allows you to select a subset of rows based on given conditions
+
+Select only the "eruptions" column.
+```{r}
+head(select(carsDF, carsDF$mpg))
+```
+
+You can also pass in column name as strings.
+```{r}
+head(select(carsDF, "mpg"))
+```
+
+Filter the SparkDataFrame to only retain rows with wait times shorter than 50 mins.
+```{r}
+head(filter(carsDF, carsDF$mpg < 20))
+```
 
 ## Window Functions
 A window function is a variation of aggregation function. In simple words,
@@ -434,7 +476,7 @@ MLPC employs backpropagation for learning the model. We use the logistic loss fu
 
 
 #### Isotonic Regression Model
-`spark.isoreg` fits an [Isotonic Regression](https://en.wikipedia.org/wiki/Isotonic_regression) model against a `SparkDataFrame`. It solves a weighted univariate a regression problem under a complete order constraint. Specifically, given a set of real observed responses $y_1, \ldots, y_n$, corresponding real features $x_1, \ldots, x_n$, and optionally positive weights $w_1, \ldots, w_n$, we want to find a monotone (piecewise) function $f$ to  minimize
+`spark.isoreg` fits an [Isotonic Regression](https://en.wikipedia.org/wiki/Isotonic_regression) model against a `SparkDataFrame`. It solves a weighted univariate a regression problem under a complete order constraint. Specifically, given a set of real observed responses $y_1, \ldots, y_n$, corresponding real features $x_1, \ldots, x_n$, and optionally positive weights $w_1, \ldots, w_n$, we want to find a monotone (piecewise linear) function $f$ to  minimize
 $$
 \ell(f) = \sum_{i=1}^n w_i (y_i - f(x_i))^2.
 $$
