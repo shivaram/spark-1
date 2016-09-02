@@ -219,20 +219,21 @@ div.tocify {
 
 <div id="overview" class="section level2">
 <h2>Overview</h2>
-<p>SparkR is an R package that provides a light-weight frontend to use Apache Spark from R. In Spark 2.0.0, SparkR provides a distributed data frame implementation that supports data processing operations like selection, filtering, aggregation etc. and distributed machine learning using MLlib.</p>
+<p>SparkR is an R package that provides a light-weight frontend to use Apache Spark from R. In Spark 2.0.0, SparkR provides a distributed data frame implementation that supports data processing operations like selection, filtering, aggregation etc. and distributed machine learning using <a href="http://spark.apache.org/mllib/">MLlib</a>.</p>
 </div>
 <div id="getting-started" class="section level2">
 <h2>Getting Started</h2>
-<p>We start with an example running on the local machine and provide an overview of SparkR in multiple dimensions: data ingestion, data processing and machine learning.</p>
+<p>We begin with an example running on the local machine, trying to provide an overview of the use of SparkR: data ingestion, data processing and machine learning.</p>
 <p>First, let’s load and attach the package.</p>
 <pre class="r"><code>library(SparkR)</code></pre>
-<p>To use SparkR, you need an Apache Spark package where backend codes to be called are compiled and packaged. You may download it from <a href="http://spark.apache.org/downloads.html">Apache Spark Website</a>. Alternatively, we provide an easy-to-use function <code>install.spark</code> to complete this process.</p>
-<pre class="r"><code>install.spark(overwrite = TRUE)</code></pre>
-<p>If you have a Spark package, you don’t have to install again, but an environment variable should be set to let SparkR know where it is. If you have run the <code>install.spark</code> function, this has already been done for you.</p>
+<p>To use SparkR, you need an Apache Spark package where backend codes to be called are compiled and packaged.</p>
+<p>If you don’t have a Spark package on the computer, you may download it from <a href="http://spark.apache.org/downloads.html">Apache Spark Website</a>. Alternatively, we provide an easy-to-use function <code>install.spark</code> to complete this process.</p>
+<pre class="r"><code>install.spark()</code></pre>
+<p>If you have a Spark package, you don’t have to install again, but make sure to set <code>SPARK_HOME</code> environment variable to let SparkR know where the main Spark package is.</p>
 <pre class="r"><code>Sys.setenv(SPARK_HOME = &quot;/HOME/spark&quot;)</code></pre>
-<p><code>SparkSession</code> is the entry point into SparkR which connects your R program to a Spark cluster. You can create a <code>SparkSession</code> using <code>sparkR.session</code> and pass in options such as the application name, any spark packages depended on, etc. We use default settings.</p>
+<p><code>SparkSession</code> is the entry point into SparkR which connects your R program to a Spark cluster. You can create a <code>SparkSession</code> using <code>sparkR.session</code> and pass in options such as the application name, any spark packages depended on, etc. We use default settings. It runs in local mode.</p>
 <pre class="r"><code>sparkR.session()</code></pre>
-<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpSd9rnP/backend_portec4f7595e99f</code></pre>
+<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpXSN6jP/backend_port8d6354ce7997</code></pre>
 <pre><code>## Java ref type org.apache.spark.sql.SparkSession id 1</code></pre>
 <p>The operations in SparkR are centered around an R object class called <code>SparkDataFrame</code>. It is a distributed collection of data organized into named columns, which is conceptually equivalent to a table in a relational database or a data frame in R, but with richer optimizations under the hood.</p>
 <p><code>SparkDataFrame</code> can be constructed from a wide array of sources such as: structured data files, tables in Hive, external databases, or existing local R data frames. For example, we create a <code>SparkDataFrame</code> from a local R data frame,</p>
@@ -290,7 +291,7 @@ showDF(carsGPDF)</code></pre>
 ## | 3.0|   15|
 ## | 5.0|    5|
 ## +----+-----+</code></pre>
-<p>If we want to convert the result back to <code>data.frame</code>, we can use <code>collect</code>.</p>
+<p>The results <code>carsDF</code> and <code>carsSubDF</code> are <code>SparkDataFrame</code> objects. To convert back to R <code>data.frame</code>, we can use <code>collect</code>.</p>
 <pre class="r"><code>carsGP &lt;- collect(carsGPDF)
 class(carsGP)</code></pre>
 <pre><code>## [1] &quot;data.frame&quot;</code></pre>
@@ -319,6 +320,8 @@ class(carsGP)</code></pre>
 ## Number of Fisher Scoring iterations: 1</code></pre>
 <p>The model can be saved by <code>write.ml</code> and loaded back using <code>read.ml</code>.</p>
 <pre class="r"><code>write.ml(model, path = &quot;/HOME/tmp/mlModel/glmModel&quot;)</code></pre>
+<p>In the end, we can stop Spark Session by running</p>
+<pre class="r"><code>sparkR.session.stop()</code></pre>
 </div>
 <div id="data-import" class="section level2">
 <h2>Data Import</h2>
@@ -338,7 +341,7 @@ head(df)</code></pre>
 <div id="data-sources" class="section level3">
 <h3>Data Sources</h3>
 <p>SparkR supports operating on a variety of data sources through the <code>SparkDataFrame</code> interface. You can check the Spark SQL programming guide for more <a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#manually-specifying-options">specific options</a> that are available for the built-in data sources.</p>
-<p>The general method for creating <code>SparkDataFrame</code> from data sources is <code>read.df</code>. This method takes in the path for the file to load and the type of data source, and the currently active SparkSession will be used automatically. SparkR supports reading JSON, CSV and Parquet files natively and through Spark Packages you can find data source connectors for popular file formats like Avro. These packages can be added with <code>sparkPackages</code> parameter when initializing SparkSession using <code>sparkR.session'.</code></p>
+<p>The general method for creating <code>SparkDataFrame</code> from data sources is <code>read.df</code>. This method takes in the path for the file to load and the type of data source, and the currently active Spark Session will be used automatically. SparkR supports reading JSON, CSV and Parquet files natively and through Spark Packages you can find data source connectors for popular file formats like Avro. These packages can be added with <code>sparkPackages</code> parameter when initializing SparkSession using <code>sparkR.session'.</code></p>
 <pre class="r"><code>sparkR.session(sparkPackages = &quot;com.databricks:spark-avro_2.11:3.0.0&quot;)</code></pre>
 <p>We can see how to use data sources using an example JSON input file. Note that the file that is used here is not a typical JSON file. Each line in the file must contain a separate, self-contained valid JSON object. As a consequence, a regular multi-line JSON file will most often fail.</p>
 <pre class="r"><code>people &lt;- read.df(paste0(Sys.getenv(&quot;SPARK_HOME&quot;), 
@@ -383,7 +386,12 @@ head(results)</code></pre>
 </div>
 <div id="data-processing" class="section level2">
 <h2>Data Processing</h2>
-<p><strong>To dplyr users</strong>: There is one main difference in the current version of SparkR we need to be careful about. To indicate a column <code>col</code> in a <code>SparkDataFrame</code> <code>df</code>, we should use <code>df$col</code> in most cases and sometimes can use <code>&quot;col&quot;</code>. A general principle is when it involves a condition on the column or multiple <code>SparkDataFrame</code>s, we should use the former syntax. For example,</p>
+<p><strong>To dplyr users</strong>: SparkR has similar interface as dplyr in data processing. However, some noticeable differences are worth mentioning in the first place. We use <code>df</code> to represent a <code>SparkDataFrame</code> and <code>col</code> to represent the name of column here.</p>
+<ol style="list-style-type: decimal">
+<li><p>indicate columns. SparkR uses either a character string of the column name or a Column object constructed with <code>$</code> to indicate a column. For example, to select <code>col</code> in <code>df</code>, we can write <code>select(df, &quot;col&quot;)</code> or <code>select(df, df$col)</code>.</p></li>
+<li><p>describe conditions. In SparkR, the Column object representation can be inserted into the condition directly, or we can use a character string to describe the condition, without referring to the <code>SparkDataFrame</code> used. For example, to select rows with value &gt; 1, we can write <code>filter(df, df$col &gt; 1)</code> or <code>filter(df, &quot;col &gt; 1&quot;)</code>.</p></li>
+</ol>
+<p>Here are more concrete examples.</p>
 <table style="width:26%;">
 <colgroup>
 <col width="12%"></col>
@@ -406,8 +414,8 @@ head(results)</code></pre>
 </tr>
 </tbody>
 </table>
-<p>We use the <code>SparkDataFrame</code> <code>carsDF</code> created above.</p>
-<p>We can get basic information about the <code>SparkDataFrame</code>.</p>
+<p>Other differences will be mentioned in the specific methods.</p>
+<p>We use the <code>SparkDataFrame</code> <code>carsDF</code> created above. We can get basic information about the <code>SparkDataFrame</code>.</p>
 <pre class="r"><code>carsDF</code></pre>
 <pre><code>## SparkDataFrame[model:string, mpg:double, cyl:double, disp:double, hp:double, drat:double, wt:double, qsec:double, vs:double, am:double, gear:double, carb:double]</code></pre>
 <p>Print out the schema in tree format.</p>
@@ -425,21 +433,11 @@ head(results)</code></pre>
 ##  |-- am: double (nullable = true)
 ##  |-- gear: double (nullable = true)
 ##  |-- carb: double (nullable = true)</code></pre>
-<p><strong>To dplyr users</strong>: One main difference SparkR has with dplyr is instead</p>
-<div id="single-table-verbs" class="section level3">
-<h3>Single Table Verbs</h3>
-<div id="filter" class="section level4">
-<h4>filter</h4>
-<p><code>filter</code> allows you to select a subset of rows based on given conditions</p>
-<p>Select only the “eruptions” column.</p>
-<pre class="r"><code>head(select(carsDF, carsDF$mpg))</code></pre>
-<pre><code>##    mpg
-## 1 21.0
-## 2 21.0
-## 3 22.8
-## 4 21.4
-## 5 18.7
-## 6 18.1</code></pre>
+<div id="sparkdataframe-operations" class="section level3">
+<h3>SparkDataFrame Operations</h3>
+<div id="selecting-rows-columns" class="section level4">
+<h4>Selecting rows, columns</h4>
+<p>SparkDataFrames support a number of functions to do structured data processing. Here we include some basic examples and a complete list can be found in the <a href="https://spark.apache.org/docs/latest/api/R/index.html">API</a> docs:</p>
 <p>You can also pass in column name as strings.</p>
 <pre class="r"><code>head(select(carsDF, &quot;mpg&quot;))</code></pre>
 <pre><code>##    mpg
@@ -459,17 +457,46 @@ head(results)</code></pre>
 ## 5         Merc 280C 17.8   6 167.6 123 3.92 3.44 18.90  1  0    4    4
 ## 6        Merc 450SE 16.4   8 275.8 180 3.07 4.07 17.40  0  0    3    3</code></pre>
 </div>
+<div id="grouping-aggregation" class="section level4">
+<h4>Grouping, Aggregation</h4>
+<p>A common flow of grouping and aggregation is</p>
+<ol style="list-style-type: decimal">
+<li><p>Use <code>groupBy</code> or <code>group_by</code> with respect to some grouping variables to create a <code>GroupedData</code> object</p></li>
+<li><p>Feed the <code>GroupedData</code> object to <code>agg</code> or <code>summarize</code> functions, with some provided aggregation functions to compute a number within each group.</p></li>
+</ol>
+<p>A number of widely used functions are supported to aggregate data after grouping, including <code>avg</code>, <code>countDistinct</code>, <code>count</code>, <code>first</code>, <code>kurtosis</code>, <code>last</code>, <code>max</code>, <code>mean</code>, <code>min</code>, <code>sd</code>, <code>skewness</code>, <code>stddev_pop</code>, <code>stddev_samp</code>, <code>sumDistinct</code>, <code>sum</code>, <code>var_pop</code>, <code>var_samp</code>, <code>var</code>.</p>
+<p>For example we can compute a histogram of the number of cylinders in the <code>mtcars</code> dataset as shown below.</p>
+<pre class="r"><code>numCyl &lt;- summarize(groupBy(carsDF, carsDF$cyl), count = n(carsDF$cyl))
+head(numCyl)</code></pre>
+<pre><code>##   cyl count
+## 1   8    14
+## 2   4    11
+## 3   6     7</code></pre>
+</div>
+<div id="operating-on-columns" class="section level4">
+<h4>Operating on Columns</h4>
+<p>SparkR also provides a number of functions that can directly applied to columns for data processing and during aggregation. The example below shows the use of basic arithmetic functions.</p>
+<pre class="r"><code>carsDF_km &lt;- carsDF
+carsDF_km$kmpg &lt;- carsDF_km$mpg * 1.61
+head(select(carsDF_km, &quot;model&quot;, &quot;mpg&quot;, &quot;kmpg&quot;))</code></pre>
+<pre><code>##               model  mpg   kmpg
+## 1         Mazda RX4 21.0 33.810
+## 2     Mazda RX4 Wag 21.0 33.810
+## 3        Datsun 710 22.8 36.708
+## 4    Hornet 4 Drive 21.4 34.454
+## 5 Hornet Sportabout 18.7 30.107
+## 6           Valiant 18.1 29.141</code></pre>
 </div>
 </div>
-<div id="window-functions" class="section level2">
-<h2>Window Functions</h2>
+<div id="window-functions" class="section level3">
+<h3>Window Functions</h3>
 <p>A window function is a variation of aggregation function. In simple words,</p>
 <ul>
 <li><p>aggregation function: <code>n</code> to <code>1</code> mapping - returns a single value for a group of entries. Examples include <code>sum</code>, <code>count</code>, <code>max</code>.</p></li>
 <li><p>window function: <code>n</code> to <code>n</code> mapping - returns one value for each entry in the group, but the value may depend on all the entries of the <em>group</em>. Examples include <code>rank</code>, <code>lead</code>, <code>lag</code>.</p></li>
 </ul>
 <p>Formally, the <em>group</em> we mentioned is called the Frame. Every input row can have a unique frame associated with it and the output of the window function on that row is based on the rows confined in that frame.</p>
-<p>Window functions are often used in conjunction with the following functions: <code>windowPartitionBy</code>, <code>windowOrderBy</code>, <code>partitionBy</code>, <code>orderBy</code>, <code>over</code>. It would be easier to look at an example first.</p>
+<p>Window functions are often used in conjunction with the following functions: <code>windowPartitionBy</code>, <code>windowOrderBy</code>, <code>partitionBy</code>, <code>orderBy</code>, <code>over</code>. It would be easier to look at an example.</p>
 <p>We still use the <code>mtcars</code> dataset. The corresponding <code>SparkDataFrame</code> is <code>carsDF</code>. Suppose for each number of cylinders, we want to calculate the rank of each car in <code>mpg</code> within the group.</p>
 <pre class="r"><code>carsSubDF &lt;- select(carsDF, &quot;model&quot;, &quot;mpg&quot;, &quot;cyl&quot;)
 ws &lt;- orderBy(windowPartitionBy(&quot;cyl&quot;), &quot;mpg&quot;)
@@ -502,10 +529,150 @@ showDF(carsRank)</code></pre>
 ## only showing top 20 rows</code></pre>
 <p>We explain in detail the above steps.</p>
 <ul>
-<li><p><code>windowPartitionBy</code> creates a Window Specification object <code>WindowSpec</code> that defines the partition. It controls which rows will be in the same partition as the given row. In this case, rows with the same value in <code>cyl</code> will be put in the same partition. <code>orderBy</code> further defines the ordering - the position a given row is in the partition. The resulting <code>WindowSpec</code> is returned as <code>ws</code>.</p></li>
-<li><p><code>withColumn</code> appends a Column called <code>&quot;rank&quot;</code> to the <code>SparkDataFrame</code>. <code>over</code> returns a windowing column. The first argument is usually a Column returned by window function(s) such as <code>rank()</code>, <code>lead(carsDF$wt)</code>. That calculates the corresponding values according to the partitioned-and-ordered table.</p></li>
+<li><code>windowPartitionBy</code> creates a Window Specification object <code>WindowSpec</code> that defines the partition. It controls which rows will be in the same partition as the given row. In this case, rows with the same value in <code>cyl</code> will be put in the same partition. <code>orderBy</code> further defines the ordering - the position a given row is in the partition. The resulting <code>WindowSpec</code> is returned as <code>ws</code>.</li>
 </ul>
-<p>Let’s look at another feature provided by window functions.</p>
+<p>More Window Specification methods include <code>rangeBetween</code>, which can define boundaries of the frame by value, and <code>rowsBetween</code>, which can define the boundaries by row indices.</p>
+<ul>
+<li><code>withColumn</code> appends a Column called <code>&quot;rank&quot;</code> to the <code>SparkDataFrame</code>. <code>over</code> returns a windowing column. The first argument is usually a Column returned by window function(s) such as <code>rank()</code>, <code>lead(carsDF$wt)</code>. That calculates the corresponding values according to the partitioned-and-ordered table.</li>
+</ul>
+</div>
+<div id="user-defined-function" class="section level3">
+<h3>User-Defined Function</h3>
+<p>In SparkR, we support several kinds of User-Defined Functions.</p>
+<div id="apply-by-partition" class="section level4">
+<h4>Apply by Partition</h4>
+<p><code>dapply</code> can apply a function to each partition of a <code>SparkDataFrame</code>. The function to be applied to each partition of the <code>SparkDataFrame</code> should have only one parameter, a <code>data.frame</code> corresponding to a partition, and the output should be a <code>data.frame</code> as well. Schema specifies the row format of the resulting a <code>SparkDataFrame</code>. It must match to data types of returned value. See <a href="#DataTypes">here</a> for mapping between R and Spark.</p>
+<p>We convert <code>mpg</code> to <code>kmpg</code> (kilometers per gallon). <code>carsSubDF</code> is a <code>SparkDataFrame</code> with a subset of <code>carsDF</code> columns.</p>
+<pre class="r"><code>carsSubDF &lt;- select(carsDF, &quot;model&quot;, &quot;mpg&quot;)
+schema &lt;- structType(structField(&quot;model&quot;, &quot;string&quot;), structField(&quot;mpg&quot;, &quot;double&quot;),
+                     structField(&quot;kmpg&quot;, &quot;double&quot;))
+out &lt;- dapply(carsSubDF, function(x) { x &lt;- cbind(x, x$mpg * 1.61) }, schema)
+head(collect(out))</code></pre>
+<pre><code>##               model  mpg   kmpg
+## 1         Mazda RX4 21.0 33.810
+## 2     Mazda RX4 Wag 21.0 33.810
+## 3        Datsun 710 22.8 36.708
+## 4    Hornet 4 Drive 21.4 34.454
+## 5 Hornet Sportabout 18.7 30.107
+## 6           Valiant 18.1 29.141</code></pre>
+<p>Like <code>dapply</code>, apply a function to each partition of a <code>SparkDataFrame</code> and collect the result back. The output of function should be a <code>data.frame</code>. But, Schema is not required to be passed. Note that <code>dapplyCollect</code> can fail if the output of UDF run on all the partition cannot be pulled to the driver and fit in driver memory.</p>
+<pre class="r"><code>out &lt;- dapplyCollect(
+         carsSubDF,
+         function(x) {
+           x &lt;- cbind(x, &quot;kmpg&quot; = x$mpg * 1.61)
+         })
+head(out, 3)</code></pre>
+<pre><code>##           model  mpg   kmpg
+## 1     Mazda RX4 21.0 33.810
+## 2 Mazda RX4 Wag 21.0 33.810
+## 3    Datsun 710 22.8 36.708</code></pre>
+</div>
+<div id="apply-by-group" class="section level4">
+<h4>Apply by Group</h4>
+<p><code>gapply</code> can apply a function to each group of a <code>SparkDataFrame</code>. The function is to be applied to each group of the <code>SparkDataFrame</code> and should have only two parameters: grouping key and R <code>data.frame</code> corresponding to that key. The groups are chosen from <code>SparkDataFrames</code> column(s). The output of function should be a <code>data.frame</code>. Schema specifies the row format of the resulting <code>SparkDataFrame</code>. It must represent R function’s output schema on the basis of Spark data types. The column names of the returned <code>data.frame</code> are set by user. See <a href="#DataTypes">here</a> for mapping between R and Spark.</p>
+<pre class="r"><code>schema &lt;- structType(structField(&quot;cyl&quot;, &quot;double&quot;), structField(&quot;max_mpg&quot;, &quot;double&quot;))
+result &lt;- gapply(
+    carsDF,
+    &quot;cyl&quot;,
+    function(key, x) {
+        y &lt;- data.frame(key, max(x$mpg))
+    },
+    schema)
+head(arrange(result, &quot;max_mpg&quot;, decreasing = TRUE))</code></pre>
+<pre><code>##   cyl max_mpg
+## 1   4    33.9
+## 2   6    21.4
+## 3   8    19.2</code></pre>
+<p>Like gapply, <code>gapplyCollect</code> applies a function to each partition of a <code>SparkDataFrame</code> and collect the result back to R <code>data.frame</code>. The output of the function should be a <code>data.frame</code>. But, the schema is not required to be passed. Note that <code>gapplyCollect</code> can fail if the output of UDF run on all the partition cannot be pulled to the driver and fit in driver memory.</p>
+<pre class="r"><code>result &lt;- gapplyCollect(
+    carsDF,
+    &quot;cyl&quot;,
+    function(key, x) {
+         y &lt;- data.frame(key, max(x$mpg))
+        colnames(y) &lt;- c(&quot;cyl&quot;, &quot;max_mpg&quot;)
+        y
+    })
+head(result[order(result$max_mpg, decreasing = TRUE), ])</code></pre>
+<pre><code>##   cyl max_mpg
+## 2   4    33.9
+## 3   6    21.4
+## 1   8    19.2</code></pre>
+</div>
+<div id="distribute-local-functions" class="section level4">
+<h4>Distribute Local Functions</h4>
+<p>Similar to <code>lapply</code> in native R, <code>spark.lapply</code> runs a function over a list of elements and distributes the computations with Spark. Applies a function in a manner that is similar to <code>doParallel</code> or <code>lapply</code> to elements of a list. The results of all the computations should fit in a single machine. If that is not the case they can do something like <code>df &lt;- createDataFrame(list)</code> and then use <code>dapply</code>.</p>
+<pre class="r"><code>families &lt;- c(&quot;gaussian&quot;, &quot;poisson&quot;)
+train &lt;- function(family) {
+  model &lt;- glm(mpg ~ hp, mtcars, family = family)
+  summary(model)
+}</code></pre>
+<p>Return a list of model’s summaries.</p>
+<pre class="r"><code>model.summaries &lt;- spark.lapply(families, train)</code></pre>
+<p>Print the summary of each model.</p>
+<pre class="r"><code>print(model.summaries)</code></pre>
+<pre><code>## [[1]]
+## 
+## Call:
+## glm(formula = mpg ~ hp, family = family, data = mtcars)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -5.7121  -2.1122  -0.8854   1.5819   8.2360  
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) 30.09886    1.63392  18.421  &lt; 2e-16 ***
+## hp          -0.06823    0.01012  -6.742 1.79e-07 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for gaussian family taken to be 14.92248)
+## 
+##     Null deviance: 1126.05  on 31  degrees of freedom
+## Residual deviance:  447.67  on 30  degrees of freedom
+## AIC: 181.24
+## 
+## Number of Fisher Scoring iterations: 2
+## 
+## 
+## [[2]]
+## 
+## Call:
+## glm(formula = mpg ~ hp, family = family, data = mtcars)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -1.4179  -0.4656  -0.1878   0.3935   1.6642  
+## 
+## Coefficients:
+##               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)  3.5205346  0.0937489  37.553  &lt; 2e-16 ***
+## hp          -0.0037514  0.0006481  -5.788 7.12e-09 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 54.524  on 31  degrees of freedom
+## Residual deviance: 18.510  on 30  degrees of freedom
+## AIC: Inf
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+</div>
+</div>
+<div id="sql-queries" class="section level3">
+<h3>SQL Queries</h3>
+<p>A <code>SparkDataFrame</code> can also be registered as a temporary view in Spark SQL and that allows you to run SQL queries over its data. The sql function enables applications to run SQL queries programmatically and returns the result as a <code>SparkDataFrame</code>.</p>
+<pre class="r"><code>people &lt;- read.df(paste0(Sys.getenv(&quot;SPARK_HOME&quot;), 
+                         &quot;/examples/src/main/resources/people.json&quot;), &quot;json&quot;)</code></pre>
+<p>Register this SparkDataFrame as a temporary view.</p>
+<pre class="r"><code>createOrReplaceTempView(people, &quot;people&quot;)</code></pre>
+<p>SQL statements can be run by using the sql method.</p>
+<pre class="r"><code>teenagers &lt;- sql(&quot;SELECT name FROM people WHERE age &gt;= 13 AND age &lt;= 19&quot;)
+head(teenagers)</code></pre>
+<pre><code>##     name
+## 1 Justin</code></pre>
+</div>
 </div>
 <div id="machine-learning" class="section level2">
 <h2>Machine Learning</h2>
@@ -760,26 +927,26 @@ df &lt;- createDataFrame(data)
 gmmModel &lt;- spark.gaussianMixture(df, ~ V1 + V2, k = 2)
 summary(gmmModel)</code></pre>
 <pre><code>## $lambda
-## [1] 0.4 0.6
+## [1] 0.3929255 0.6070745
 ## 
 ## $mu
 ## $mu[[1]]
-## [1] 0.1354064 0.3826231
+## [1] 0.4564969 0.7975720
 ## 
 ## $mu[[2]]
-## [1] 3.021579 4.372561
+## [1] 2.687789 4.494179
 ## 
 ## 
 ## $sigma
 ## $sigma[[1]]
-##      [,1]       [,2]      
-## [1,] 1.98939    -0.8800996
-## [2,] -0.8800996 0.5530281 
+##      [,1]     [,2]     
+## [1,] 2.021383 1.330238 
+## [2,] 1.330238 0.8907766
 ## 
 ## $sigma[[2]]
-##      [,1]      [,2]     
-## [1,] 0.1573122 0.1739219
-## [2,] 0.1739219 0.6611829
+##      [,1]     [,2]    
+## [1,] 2.231438 0.724447
+## [2,] 0.724447 1.090499
 ## 
 ## 
 ## $posterior
@@ -789,20 +956,20 @@ summary(gmmModel)</code></pre>
 ## [1] FALSE</code></pre>
 <pre class="r"><code>gmmFitted &lt;- predict(gmmModel, df)
 showDF(select(gmmFitted, &quot;V1&quot;, &quot;V2&quot;, &quot;prediction&quot;))</code></pre>
-<pre><code>## +-------------------+-------------------+----------+
-## |                 V1|                 V2|prediction|
-## +-------------------+-------------------+----------+
-## |-1.5500701782887587| 1.3315685851110417|         0|
-## | 0.7185290541726932| 0.6644450266209627|         0|
-## |  2.130381222048295|-0.7199961639640005|         0|
-## |-0.7572144215752278| 0.2544748109445785|         0|
-## |  2.484725198733279| 3.8303265074624733|         1|
-## |   2.72600073095808|  5.185982856972473|         1|
-## | 3.1391024819419644| 4.0374438370557115|         1|
-## |  2.922051022519514|  3.224125181055697|         1|
-## |  3.755081689852016| 5.6288589060038845|         1|
-## | 3.1025134801701855|  4.328629145757465|         1|
-## +-------------------+-------------------+----------+</code></pre>
+<pre><code>## +--------------------+-------------------+----------+
+## |                  V1|                 V2|prediction|
+## +--------------------+-------------------+----------+
+## |-0.14802601858141137| 0.3437673566557084|         0|
+## | -0.3188201216866046| 3.1828433609309945|         1|
+## | 0.38855726963065623| 0.5831524833544763|         0|
+## | -1.0754969904953178|-0.0619323944398601|         0|
+## |   2.546832533688906|  6.228757914973165|         1|
+## |   4.622869841721075|  4.714021557031826|         1|
+## |  2.6998411438686967|  3.390343166410425|         1|
+## |  3.1685152415104234|  5.057966173490067|         1|
+## |  3.3991681738699104|  4.537568077520646|         1|
+## |   2.827134906611155|  2.440394256869946|         0|
+## +--------------------+-------------------+----------+</code></pre>
 </div>
 <div id="latent-dirichlet-allocation" class="section level4">
 <h4>Latent Dirichlet Allocation</h4>
@@ -851,16 +1018,16 @@ corpusDF &lt;- createDataFrame(corpus)
 model &lt;- spark.lda(data = corpusDF, k = 5, optimizer = &quot;em&quot;)
 summary(model)</code></pre>
 <pre><code>## $docConcentration
-## [1] 0.1666625 0.2475252 0.1666325 0.1666364 0.1680930
+## [1] 0.1666680 0.2475256 0.1666328 0.1666352 0.1680919
 ## 
 ## $topicConcentration
 ## [1] 0.2
 ## 
 ## $logLikelihood
-## [1] -318.7388
+## [1] -318.7393
 ## 
 ## $logPerplexity
-## [1] 2.414688
+## [1] 2.414691
 ## 
 ## $isDistributed
 ## [1] FALSE
@@ -883,15 +1050,15 @@ head(posterior)</code></pre>
 ## 5 3 1 1 9 3 0 2 0 0 1 3
 ## 6 4 2 0 3 4 5 1 1 1 4 0
 ##                                            topicDistribution
-## 1 0.01409444, 0.94353599, 0.01407458, 0.01409048, 0.01420451
-## 2 0.01402474, 0.94375252, 0.01402839, 0.01402891, 0.01416544
-## 3 0.01406878, 0.94356737, 0.01405979, 0.01405519, 0.01424887
-## 4 0.01404847, 0.94367024, 0.01405266, 0.01404983, 0.01417881
-## 5 0.01403983, 0.94370390, 0.01404169, 0.01404302, 0.01417156
-## 6 0.01409289, 0.94340237, 0.01409610, 0.01408893, 0.01431972</code></pre>
+## 1 0.01409530, 0.94353095, 0.01407485, 0.01409384, 0.01420507
+## 2 0.01402522, 0.94375325, 0.01402805, 0.01402863, 0.01416485
+## 3 0.01406927, 0.94356832, 0.01405981, 0.01405508, 0.01424753
+## 4 0.01404891, 0.94367030, 0.01405252, 0.01404955, 0.01417873
+## 5 0.01404031, 0.94370298, 0.01404179, 0.01404288, 0.01417204
+## 6 0.01409339, 0.94339607, 0.01409613, 0.01408883, 0.01432559</code></pre>
 <pre class="r"><code>perplexity &lt;- spark.perplexity(model, corpusDF)
 perplexity</code></pre>
-<pre><code>## [1] 2.414688</code></pre>
+<pre><code>## [1] 2.414691</code></pre>
 </div>
 <div id="multilayer-perceptron" class="section level4">
 <h4>Multilayer Perceptron</h4>
@@ -960,13 +1127,95 @@ head(predict(isoregModel, newDF))</code></pre>
 </div>
 </div>
 </div>
-<div id="remote-connection" class="section level2">
-<h2>Remote Connection</h2>
-</div>
 <div id="advanced-topics" class="section level2">
 <h2>Advanced Topics</h2>
-<p>In the end, we stop the <code>SparkSession</code>.</p>
-<pre class="r"><code>sparkR.session.stop()</code></pre>
+<div id="cluster-mode" class="section level3">
+<h3>Cluster Mode</h3>
+<p>SparkR can connect to remote Spark clusters. <a href="http://spark.apache.org/docs/latest/cluster-overview.html">Cluster Mode Overview</a> is a good introduction to different Spark cluster modes.</p>
+<p>When connecting SparkR to a remote Spark cluster, make sure that the Spark version and Hadoop version on the machine match the corresponding versions on the cluster. Current SparkR package is compatible with</p>
+<pre><code>## [1] &quot;Spark 2.0.0&quot;</code></pre>
+<p>It should be used both on the local computer and on the remote cluster.</p>
+</div>
+</div>
+<div id="appendix" class="section level2">
+<h2>Appendix</h2>
+<div id="DataTypes" class="section level3">
+<h3>R and Spark Data Types</h3>
+<table>
+<thead>
+<tr class="header">
+<th>R</th>
+<th>Spark</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>byte</td>
+<td>byte</td>
+</tr>
+<tr class="even">
+<td>integer</td>
+<td>integer</td>
+</tr>
+<tr class="odd">
+<td>float</td>
+<td>float</td>
+</tr>
+<tr class="even">
+<td>double</td>
+<td>double</td>
+</tr>
+<tr class="odd">
+<td>numeric</td>
+<td>double</td>
+</tr>
+<tr class="even">
+<td>character</td>
+<td>string</td>
+</tr>
+<tr class="odd">
+<td>string</td>
+<td>string</td>
+</tr>
+<tr class="even">
+<td>binary</td>
+<td>binary</td>
+</tr>
+<tr class="odd">
+<td>raw</td>
+<td>binary</td>
+</tr>
+<tr class="even">
+<td>logical</td>
+<td>boolean</td>
+</tr>
+<tr class="odd">
+<td>POSIXct</td>
+<td>timestamp</td>
+</tr>
+<tr class="even">
+<td>POSIXlt</td>
+<td>timestamp</td>
+</tr>
+<tr class="odd">
+<td>Date</td>
+<td>date</td>
+</tr>
+<tr class="even">
+<td>array</td>
+<td>array</td>
+</tr>
+<tr class="odd">
+<td>list</td>
+<td>array</td>
+</tr>
+<tr class="even">
+<td>env</td>
+<td>map</td>
+</tr>
+</tbody>
+</table>
+</div>
 </div>
 <div id="faq" class="section level2">
 <h2>FAQ</h2>
