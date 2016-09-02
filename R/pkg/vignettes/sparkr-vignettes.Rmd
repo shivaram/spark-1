@@ -664,6 +664,18 @@ paste("Spark", packageVersion("SparkR"))
 ```
 It should be used both on the local computer and on the remote cluster.
 
+To connect, pass the URL of the master node to `sparkR.session`. A complete list can be seen in [Spark Master URLs](http://spark.apache.org/docs/latest/submitting-applications.html#master-urls). 
+For example, to connect to a local cluster master, we can call
+
+```{r, eval=FALSE}
+sparkR.session(master = "spark://local:7077")
+```
+
+For YARN cluster, SparkR only supports the client mode.
+```{r, eval=FALSE}
+sparkR.session(master = "yarn")
+```
+
 ## Appendix
 
 ### R and Spark Data Types {#DataTypes}
