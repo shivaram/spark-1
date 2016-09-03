@@ -233,7 +233,7 @@ div.tocify {
 <pre class="r"><code>Sys.setenv(SPARK_HOME = &quot;/HOME/spark&quot;)</code></pre>
 <p><code>SparkSession</code> is the entry point into SparkR which connects your R program to a Spark cluster. You can create a <code>SparkSession</code> using <code>sparkR.session</code> and pass in options such as the application name, any spark packages depended on, etc. We use default settings. It runs in local mode.</p>
 <pre class="r"><code>sparkR.session()</code></pre>
-<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpXSN6jP/backend_port8d6354ce7997</code></pre>
+<pre><code>## Launching java with spark-submit command /Users/junyangq/spark//bin/spark-submit   sparkr-shell /var/folders/jh/6pw_r0d51317krg8ftgy53f40000gn/T//RtmpKAtJ8U/backend_portbe3a130d80ff</code></pre>
 <pre><code>## Java ref type org.apache.spark.sql.SparkSession id 1</code></pre>
 <p>The operations in SparkR are centered around an R object class called <code>SparkDataFrame</code>. It is a distributed collection of data organized into named columns, which is conceptually equivalent to a table in a relational database or a data frame in R, but with richer optimizations under the hood.</p>
 <p><code>SparkDataFrame</code> can be constructed from a wide array of sources such as: structured data files, tables in Hive, external databases, or existing local R data frames. For example, we create a <code>SparkDataFrame</code> from a local R data frame,</p>
@@ -322,6 +322,55 @@ class(carsGP)</code></pre>
 <pre class="r"><code>write.ml(model, path = &quot;/HOME/tmp/mlModel/glmModel&quot;)</code></pre>
 <p>In the end, we can stop Spark Session by running</p>
 <pre class="r"><code>sparkR.session.stop()</code></pre>
+</div>
+<div id="setup" class="section level2">
+<h2>Setup</h2>
+<div id="spark-session" class="section level3">
+<h3>Spark Session</h3>
+<p>The following Spark driver properties can be set in <code>sparkConfig</code>.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Property Name</th>
+<th>Property group</th>
+<th>spark-submit equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>spark.driver.memory</td>
+<td>Application Properties</td>
+<td>–driver-memory</td>
+</tr>
+<tr class="even">
+<td>spark.driver.extraClassPath</td>
+<td>Runtime Environment</td>
+<td>–driver-class-path</td>
+</tr>
+<tr class="odd">
+<td>spark.driver.extraJavaOptions</td>
+<td>Runtime Environment</td>
+<td>–driver-java-options</td>
+</tr>
+<tr class="even">
+<td>spark.driver.extraLibraryPath</td>
+<td>Runtime Environment</td>
+<td>–driver-library-path</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="cluster-mode" class="section level3">
+<h3>Cluster Mode</h3>
+<p>SparkR can connect to remote Spark clusters. <a href="http://spark.apache.org/docs/latest/cluster-overview.html">Cluster Mode Overview</a> is a good introduction to different Spark cluster modes.</p>
+<p>When connecting SparkR to a remote Spark cluster, make sure that the Spark version and Hadoop version on the machine match the corresponding versions on the cluster. Current SparkR package is compatible with</p>
+<pre><code>## [1] &quot;Spark 2.0.0&quot;</code></pre>
+<p>It should be used both on the local computer and on the remote cluster.</p>
+<p>To connect, pass the URL of the master node to <code>sparkR.session</code>. A complete list can be seen in <a href="http://spark.apache.org/docs/latest/submitting-applications.html#master-urls">Spark Master URLs</a>. For example, to connect to a local cluster master, we can call</p>
+<pre class="r"><code>sparkR.session(master = &quot;spark://local:7077&quot;)</code></pre>
+<p>For YARN cluster, SparkR only supports the client mode.</p>
+<pre class="r"><code>sparkR.session(master = &quot;yarn&quot;)</code></pre>
+</div>
 </div>
 <div id="data-import" class="section level2">
 <h2>Data Import</h2>
@@ -927,26 +976,26 @@ df &lt;- createDataFrame(data)
 gmmModel &lt;- spark.gaussianMixture(df, ~ V1 + V2, k = 2)
 summary(gmmModel)</code></pre>
 <pre><code>## $lambda
-## [1] 0.3929255 0.6070745
+## [1] 0.4000004 0.5999996
 ## 
 ## $mu
 ## $mu[[1]]
-## [1] 0.4564969 0.7975720
+## [1] 0.8159244 0.4405515
 ## 
 ## $mu[[2]]
-## [1] 2.687789 4.494179
+## [1] 3.034007 4.475828
 ## 
 ## 
 ## $sigma
 ## $sigma[[1]]
-##      [,1]     [,2]     
-## [1,] 2.021383 1.330238 
-## [2,] 1.330238 0.8907766
+##      [,1]        [,2]       
+## [1,] 0.4763343   -0.09395206
+## [2,] -0.09395206 0.8492281  
 ## 
 ## $sigma[[2]]
-##      [,1]     [,2]    
-## [1,] 2.231438 0.724447
-## [2,] 0.724447 1.090499
+##      [,1]       [,2]      
+## [1,] 1.116189   -0.3408798
+## [2,] -0.3408798 0.3243061 
 ## 
 ## 
 ## $posterior
@@ -956,20 +1005,20 @@ summary(gmmModel)</code></pre>
 ## [1] FALSE</code></pre>
 <pre class="r"><code>gmmFitted &lt;- predict(gmmModel, df)
 showDF(select(gmmFitted, &quot;V1&quot;, &quot;V2&quot;, &quot;prediction&quot;))</code></pre>
-<pre><code>## +--------------------+-------------------+----------+
-## |                  V1|                 V2|prediction|
-## +--------------------+-------------------+----------+
-## |-0.14802601858141137| 0.3437673566557084|         0|
-## | -0.3188201216866046| 3.1828433609309945|         1|
-## | 0.38855726963065623| 0.5831524833544763|         0|
-## | -1.0754969904953178|-0.0619323944398601|         0|
-## |   2.546832533688906|  6.228757914973165|         1|
-## |   4.622869841721075|  4.714021557031826|         1|
-## |  2.6998411438686967|  3.390343166410425|         1|
-## |  3.1685152415104234|  5.057966173490067|         1|
-## |  3.3991681738699104|  4.537568077520646|         1|
-## |   2.827134906611155|  2.440394256869946|         0|
-## +--------------------+-------------------+----------+</code></pre>
+<pre><code>## +-------------------+-------------------+----------+
+## |                 V1|                 V2|prediction|
+## +-------------------+-------------------+----------+
+## | 0.7212924990296785| 0.6804778552461263|         0|
+## | 1.7023597530257268|-0.7515664802963296|         0|
+## |-0.2112969944430051|0.06082658268951577|         0|
+## |  1.051335125612143|  1.772454161411131|         0|
+## | 3.4068107905235134| 5.0720086203141435|         1|
+## | 2.4434779156754383| 4.3827744683163985|         1|
+## |  5.099806471262699| 3.8553621051014937|         1|
+## | 2.6660451400733596|  4.336997228018436|         1|
+## | 1.6976557727358053|  5.360445392662975|         1|
+## | 2.8902452466769284| 3.8473802024470407|         1|
+## +-------------------+-------------------+----------+</code></pre>
 </div>
 <div id="latent-dirichlet-allocation" class="section level4">
 <h4>Latent Dirichlet Allocation</h4>
@@ -1018,16 +1067,16 @@ corpusDF &lt;- createDataFrame(corpus)
 model &lt;- spark.lda(data = corpusDF, k = 5, optimizer = &quot;em&quot;)
 summary(model)</code></pre>
 <pre><code>## $docConcentration
-## [1] 0.1666680 0.2475256 0.1666328 0.1666352 0.1680919
+## [1] 0.1666620 0.2475245 0.1666316 0.1666351 0.1680889
 ## 
 ## $topicConcentration
 ## [1] 0.2
 ## 
 ## $logLikelihood
-## [1] -318.7393
+## [1] -318.7387
 ## 
 ## $logPerplexity
-## [1] 2.414691
+## [1] 2.414687
 ## 
 ## $isDistributed
 ## [1] FALSE
@@ -1050,15 +1099,15 @@ head(posterior)</code></pre>
 ## 5 3 1 1 9 3 0 2 0 0 1 3
 ## 6 4 2 0 3 4 5 1 1 1 4 0
 ##                                            topicDistribution
-## 1 0.01409530, 0.94353095, 0.01407485, 0.01409384, 0.01420507
-## 2 0.01402522, 0.94375325, 0.01402805, 0.01402863, 0.01416485
-## 3 0.01406927, 0.94356832, 0.01405981, 0.01405508, 0.01424753
-## 4 0.01404891, 0.94367030, 0.01405252, 0.01404955, 0.01417873
-## 5 0.01404031, 0.94370298, 0.01404179, 0.01404288, 0.01417204
-## 6 0.01409339, 0.94339607, 0.01409613, 0.01408883, 0.01432559</code></pre>
+## 1 0.01409431, 0.94353632, 0.01407450, 0.01409065, 0.01420422
+## 2 0.01402469, 0.94375465, 0.01402782, 0.01402870, 0.01416414
+## 3 0.01406876, 0.94356690, 0.01405973, 0.01405508, 0.01424953
+## 4 0.01404847, 0.94367008, 0.01405272, 0.01404966, 0.01417907
+## 5 0.01403980, 0.94370443, 0.01404162, 0.01404285, 0.01417130
+## 6 0.01409286, 0.94340534, 0.01409602, 0.01408882, 0.01431697</code></pre>
 <pre class="r"><code>perplexity &lt;- spark.perplexity(model, corpusDF)
 perplexity</code></pre>
-<pre><code>## [1] 2.414691</code></pre>
+<pre><code>## [1] 2.414687</code></pre>
 </div>
 <div id="multilayer-perceptron" class="section level4">
 <h4>Multilayer Perceptron</h4>
@@ -1085,6 +1134,47 @@ f(z_i) = \frac{e^{z_i}}{\sum_{k=1}^N e^{z_k}}.
 </div>
 <div id="collaborative-filtering" class="section level4">
 <h4>Collaborative Filtering</h4>
+<p><code>spark.als</code> learns latent factors in <a href="https://en.wikipedia.org/wiki/Recommender_system#Collaborative_filtering">collaborative filtering</a> via <a href="http://dl.acm.org/citation.cfm?id=1608614">alternating least squares</a>.</p>
+<p>There are multiple options that can be configured in <code>spark.als</code>, including <code>rank</code>, <code>reg</code>, <code>nonnegative</code>. For a complete list, refer to the help file.</p>
+<pre class="r"><code>ratings &lt;- list(list(0, 0, 4.0), list(0, 1, 2.0), list(1, 1, 3.0), list(1, 2, 4.0),
+                list(2, 1, 1.0), list(2, 2, 5.0))
+df &lt;- createDataFrame(ratings, c(&quot;user&quot;, &quot;item&quot;, &quot;rating&quot;))
+model &lt;- spark.als(df, &quot;rating&quot;, &quot;user&quot;, &quot;item&quot;, rank = 10, reg = 0.1, nonnegative = TRUE)</code></pre>
+<p>Extract latent factors.</p>
+<pre class="r"><code>stats &lt;- summary(model)
+userFactors &lt;- stats$userFactors
+itemFactors &lt;- stats$itemFactors
+head(userFactors)</code></pre>
+<pre><code>##   id
+## 1  0
+## 2  1
+## 3  2
+##                                                                                                                           features
+## 1           0.36135060, 0.00000000, 0.14246520, 0.79222524, 0.25852802, 0.35938185, 1.02794230, 0.00000000, 0.40629458, 0.03039724
+## 2                     0.6459087, 0.0000000, 0.4240893, 0.5433040, 0.5990543, 0.2464622, 0.7952952, 0.0000000, 1.0376287, 0.3610190
+## 3 0.147648051, 0.000000000, 0.862470269, 0.008587426, 0.171784312, 0.003895568, 0.024497632, 0.000000000, 0.316428304, 1.357668996</code></pre>
+<pre class="r"><code>head(itemFactors)</code></pre>
+<pre><code>##   id
+## 1  0
+## 2  1
+## 3  2
+##                                                                                                                 features
+## 1 0.65061080, 0.00000000, 0.26098290, 1.38994920, 0.47113958, 0.63053089, 1.80735207, 0.00000000, 0.74440372, 0.06321633
+## 2           0.5822609, 0.0000000, 0.3250861, 0.4984071, 0.5374193, 0.2260954, 0.7286831, 0.0000000, 0.9294589, 0.2301433
+## 3           0.6116845, 0.0000000, 1.5209249, 0.3454843, 0.6182634, 0.1567241, 0.5231636, 0.0000000, 1.0985043, 2.2063246</code></pre>
+<p>Make predictions.</p>
+<pre class="r"><code>predicted &lt;- predict(model, df)
+showDF(predicted)</code></pre>
+<pre><code>## +----+----+------+----------+
+## |user|item|rating|prediction|
+## +----+----+------+----------+
+## | 1.0| 1.0|   3.0| 2.7894442|
+## | 2.0| 1.0|   1.0| 1.0882444|
+## | 0.0| 1.0|   2.0| 2.0054312|
+## | 1.0| 2.0|   4.0| 3.9892373|
+## | 2.0| 2.0|   5.0| 4.8677244|
+## | 0.0| 0.0|   4.0| 3.8840594|
+## +----+----+------+----------+</code></pre>
 </div>
 <div id="isotonic-regression-model" class="section level4">
 <h4>Isotonic Regression Model</h4>
@@ -1126,15 +1216,102 @@ head(predict(isoregModel, newDF))</code></pre>
 ## 2 3.2       6.30</code></pre>
 </div>
 </div>
+<div id="model-persistence" class="section level3">
+<h3>Model Persistence</h3>
+<p>The following example shows how to save/load an ML model by SparkR.</p>
+<pre class="r"><code>irisDF &lt;- suppressWarnings(createDataFrame(iris))
+gaussianGLM &lt;- spark.glm(irisDF, Sepal_Length ~ Sepal_Width + Species, family = &quot;gaussian&quot;)
+
+# Save and then load a fitted MLlib model
+modelPath &lt;- tempfile(pattern = &quot;ml&quot;, fileext = &quot;.tmp&quot;)
+write.ml(gaussianGLM, modelPath)
+gaussianGLM2 &lt;- read.ml(modelPath)
+
+# Check model summary
+summary(gaussianGLM2)</code></pre>
+<pre><code>## 
+## Saved-loaded model does not support output 'Deviance Residuals'.
+## 
+## Coefficients:
+##                     Estimate  Std. Error  t value  Pr(&gt;|t|)  
+## (Intercept)         2.2514    0.36975     6.0889   9.5681e-09
+## Sepal_Width         0.80356   0.10634     7.5566   4.1873e-12
+## Species_versicolor  1.4587    0.11211     13.012   0         
+## Species_virginica   1.9468    0.10001     19.465   0         
+## 
+## (Dispersion parameter for gaussian family taken to be 0.1918059)
+## 
+##     Null deviance: 102.168  on 149  degrees of freedom
+## Residual deviance:  28.004  on 146  degrees of freedom
+## AIC: 183.9
+## 
+## Number of Fisher Scoring iterations: 1</code></pre>
+<pre class="r"><code># Check model prediction
+gaussianPredictions &lt;- predict(gaussianGLM2, irisDF)
+showDF(gaussianPredictions)</code></pre>
+<pre><code>## +------------+-----------+------------+-----------+-------+-----+------------------+
+## |Sepal_Length|Sepal_Width|Petal_Length|Petal_Width|Species|label|        prediction|
+## +------------+-----------+------------+-----------+-------+-----+------------------+
+## |         5.1|        3.5|         1.4|        0.2| setosa|  5.1| 5.063856384860281|
+## |         4.9|        3.0|         1.4|        0.2| setosa|  4.9| 4.662075934441678|
+## |         4.7|        3.2|         1.3|        0.2| setosa|  4.7|  4.82278811460912|
+## |         4.6|        3.1|         1.5|        0.2| setosa|  4.6|4.7424320245253995|
+## |         5.0|        3.6|         1.4|        0.2| setosa|  5.0| 5.144212474944002|
+## |         5.4|        3.9|         1.7|        0.4| setosa|  5.4| 5.385280745195163|
+## |         4.6|        3.4|         1.4|        0.3| setosa|  4.6|  4.98350029477656|
+## |         5.0|        3.4|         1.5|        0.2| setosa|  5.0|  4.98350029477656|
+## |         4.4|        2.9|         1.4|        0.2| setosa|  4.4| 4.581719844357957|
+## |         4.9|        3.1|         1.5|        0.1| setosa|  4.9|4.7424320245253995|
+## |         5.4|        3.7|         1.5|        0.2| setosa|  5.4| 5.224568565027722|
+## |         4.8|        3.4|         1.6|        0.2| setosa|  4.8|  4.98350029477656|
+## |         4.8|        3.0|         1.4|        0.1| setosa|  4.8| 4.662075934441678|
+## |         4.3|        3.0|         1.1|        0.1| setosa|  4.3| 4.662075934441678|
+## |         5.8|        4.0|         1.2|        0.2| setosa|  5.8| 5.465636835278884|
+## |         5.7|        4.4|         1.5|        0.4| setosa|  5.7|5.7870611956137665|
+## |         5.4|        3.9|         1.3|        0.4| setosa|  5.4| 5.385280745195163|
+## |         5.1|        3.5|         1.4|        0.3| setosa|  5.1| 5.063856384860281|
+## |         5.7|        3.8|         1.7|        0.3| setosa|  5.7| 5.304924655111442|
+## |         5.1|        3.8|         1.5|        0.3| setosa|  5.1| 5.304924655111442|
+## +------------+-----------+------------+-----------+-------+-----+------------------+
+## only showing top 20 rows</code></pre>
+<pre class="r"><code>unlink(modelPath)</code></pre>
+</div>
 </div>
 <div id="advanced-topics" class="section level2">
 <h2>Advanced Topics</h2>
-<div id="cluster-mode" class="section level3">
-<h3>Cluster Mode</h3>
-<p>SparkR can connect to remote Spark clusters. <a href="http://spark.apache.org/docs/latest/cluster-overview.html">Cluster Mode Overview</a> is a good introduction to different Spark cluster modes.</p>
-<p>When connecting SparkR to a remote Spark cluster, make sure that the Spark version and Hadoop version on the machine match the corresponding versions on the cluster. Current SparkR package is compatible with</p>
-<pre><code>## [1] &quot;Spark 2.0.0&quot;</code></pre>
-<p>It should be used both on the local computer and on the remote cluster.</p>
+<div id="sparkr-object-classes" class="section level3">
+<h3>SparkR Object Classes</h3>
+<p>There are three main object classes in SparkR you may be working with.</p>
+<ul>
+<li><code>SparkDataFrame</code>: the central component of SparkR. It is an S4 class representing distributed collection of data organized into named columns, which is conceptually equivalent to a table in a relational database or a data frame in R. It has two slots <code>sdf</code> and <code>env</code>.
+<ul>
+<li><code>sdf</code> stores a reference to the corresponding Spark Dataset in the Spark JVM backend.</li>
+<li><code>env</code> saves the meta-information of the object such as <code>isCached</code>.</li>
+</ul></li>
+</ul>
+<p>It can be created by data import methods or by transforming an existing <code>SparkDataFrame</code>. We can manipulate <code>SparkDataFrame</code> by numerous data processing functions and feed that into machine learning algorithms.</p>
+<ul>
+<li><code>Column</code>: an S4 class representing column of <code>SparkDataFrame</code>. The slot <code>jc</code> saves a reference to the corresponding Column object in the Spark JVM backend.</li>
+</ul>
+<p>It can be obtained from a <code>SparkDataFrame</code> by <code>$</code> operator, <code>df$col</code>. More often, it is used together with other functions, for example, with <code>select</code> to select particular columns, with <code>filter</code> and constructed conditions to select rows, with aggregation functions to compute aggregate statistics for each group.</p>
+<ul>
+<li><code>GroupedData</code>: an S4 class representing grouped data created by <code>groupBy</code> or by transforming other <code>GroupedData</code>. Its <code>sgd</code> slot saves a reference to a RelationalGroupedDataset object in the backend.</li>
+</ul>
+<p>This is often an intermediate object with group information and followed up by aggregation operations.</p>
+</div>
+<div id="architecture" class="section level3">
+<h3>Architecture</h3>
+<p>A complete description of architecture can be seen in paper <a href="https://people.csail.mit.edu/matei/papers/2016/sigmod_sparkr.pdf">SparkR: Scaling R Programs with Spark</a>, Shivaram Venkataraman, Zongheng Yang, Davies Liu, Eric Liang, Hossein Falaki, Xiangrui Meng, Reynold Xin, Ali Ghodsi, Michael Franklin, Ion Stoica, and Matei Zaharia. SIGMOD 2016. June 2016.</p>
+<p>Under the hood of SparkR is Spark SQL engine. This avoids the overheads of running interpreted R code, and the optimized SQL execution engine in Spark uses structural information about data and computation flow to perform a bunch of optimizations to speed up the computation.</p>
+<p>The main method calls of actual computation happen in the Spark JVM of the driver. We have a socket-based SparkR API that allows us to invoke functions on the JVM from R. We use a SparkR JVM backend that listens on a Netty-based socket server.</p>
+<p>Two kinds of RPCs are supported in the SparkR JVM backend: method invocation and creating new objects. Method invocation can be done in two ways.</p>
+<ul>
+<li><p><code>invokeJMethod</code> takes a reference to an existing Java object and a list of arguments to be passed on to the method.</p></li>
+<li><p><code>invokeJStatic</code> takes a class name for static method and a list of arguments to be passed on to the method.</p></li>
+</ul>
+<p>The arguments are serialized using our custom wire format which is then deserialized on the JVM side. We then use Java reflection to invoke the appropriate method.</p>
+<p>To create objects, a special method name <code>init</code> is used and then similarly the appropriate constructor is invoked with provided arguments.</p>
+<p>Finally, we use a new R class <code>jobj</code> that refers to a Java object existing in the backend. These references are tracked on the Java side and are automatically garbage collected when they go out of scope on the R side.</p>
 </div>
 </div>
 <div id="appendix" class="section level2">
@@ -1217,8 +1394,14 @@ head(predict(isoregModel, newDF))</code></pre>
 </table>
 </div>
 </div>
-<div id="faq" class="section level2">
-<h2>FAQ</h2>
+<div id="references" class="section level2">
+<h2>References</h2>
+<ul>
+<li><p><a href="http://spark.apache.org/docs/latest/cluster-overview.html">Spark Cluster Mode Overview</a></p></li>
+<li><p><a href="http://spark.apache.org/docs/latest/submitting-applications.html">Submitting Spark Applications</a></p></li>
+<li><p><a href="http://spark.apache.org/docs/latest/ml-guide.html">Machine Learning Library Guide (MLlib)</a></p></li>
+<li><p><a href="SparkR:%20Scaling%20R%20Programs%20with%20Spark">SparkR: Scaling R Programs with Spark</a>, Shivaram Venkataraman, Zongheng Yang, Davies Liu, Eric Liang, Hossein Falaki, Xiangrui Meng, Reynold Xin, Ali Ghodsi, Michael Franklin, Ion Stoica, and Matei Zaharia. SIGMOD 2016. June 2016.</p></li>
+</ul>
 </div>
 
 
