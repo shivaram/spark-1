@@ -902,7 +902,7 @@ setMethod("write.ml", signature(object = "GaussianMixtureModel", path = "charact
 #' }
 #' @note read.ml since 2.0.0
 read.ml <- function(path) {
-  path <- suppressWarnings(normalizePath(path))
+  path <- suppressWarnings(normalizePath(path, winslash="/"))
   jobj <- callJStatic("org.apache.spark.ml.r.RWrappers", "load", path)
   if (isInstanceOf(jobj, "org.apache.spark.ml.r.NaiveBayesWrapper")) {
     new("NaiveBayesModel", jobj = jobj)
